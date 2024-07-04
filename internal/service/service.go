@@ -6,37 +6,20 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"time"
+
+	"github.com/golang-jwt/jwt/v4"
+
 	"github.com/RIBorisov/gophermart/internal/config"
 	"github.com/RIBorisov/gophermart/internal/logger"
 	"github.com/RIBorisov/gophermart/internal/models/register"
 	"github.com/RIBorisov/gophermart/internal/storage"
-	"github.com/golang-jwt/jwt/v4"
-	"time"
 )
 
 type Service struct {
 	Log     *logger.Log
 	Storage storage.Store
 	Config  *config.Config
-}
-
-func (s *Service) RegisterUser(ctx context.Context, user *register.Request) (string, error) {
-	encrypted, err := encrypt(s.Config.Secret.SecretKey, user.Password)
-	if err != nil {
-		return "", fmt.Errorf("failed encrypt user password: %w", err)
-	}
-	user.Password = encrypted
-
-	userID, err := s.Storage.Register(ctx, user)
-	if err != nil {
-		return "", fmt.Errorf("failed register user: %w", err)
-	}
-	authToken, err := buildJWTString(s.Config.Secret.SecretKey, userID)
-	if err != nil {
-		return "", fmt.Errorf("failed generate authToken: %w", err)
-	}
-
-	return authToken, nil
 }
 
 func encrypt(secret, data string) (string, error) {
@@ -47,26 +30,22 @@ func encrypt(secret, data string) (string, error) {
 	// кодируем в base64 строку для хранения в бд
 	encodedPassword := base64.StdEncoding.EncodeToString(hashedPassword)
 
-	//err := decrypt(secret, encodedPassword, data)
-	//if err != nil {
-	//	return "", fmt.Errorf("failed decode: %w", err)
-	//}
 	return encodedPassword, nil
 }
 
-func decrypt(secret, encodedData, password string) error {
-	// decode encoded data
+func decryptAndCompare(secret, encodedData, password string) error {
+	// декодируем закодированную строку
 	decodedBytes, err := base64.StdEncoding.DecodeString(encodedData)
 	if err != nil {
 		return fmt.Errorf("failed to decode encoded data: %w", err)
 	}
 
-	// resolving hash
+	// вычисляем хеш
 	h := sha256.New()
 	h.Write([]byte(password + secret))
 	expectedHash := h.Sum(nil)
 
-	// compare hashes, if !ok => user passed invalid password
+	// сравниваем хеши, если !ok, то неверный пароль
 	if !hmac.Equal(decodedBytes, expectedHash) {
 		return storage.ErrIncorrectPassword
 	}
@@ -78,38 +57,57 @@ type сlaims struct {
 	UserID string
 }
 
-const tokenExp = time.Hour * 720
-
 func buildJWTString(secretKey string, userID string) (string, error) {
+	const tokenExp = time.Hour * 720
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, сlaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExp)),
 		},
 		UserID: userID,
 	})
+
 	tokenString, err := token.SignedString([]byte(secretKey))
 	if err != nil {
 		return "", fmt.Errorf("failed to create token string: %w", err)
 	}
+
 	return tokenString, nil
 }
 
-//func getUserID(tokenString, secretKey string, log *logger.Log) string {
-//	claims := &Claims{}
-//	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
-//		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-//			return nil, fmt.Errorf("unexpected signing method %v", t.Header["alg"])
-//		}
-//		return []byte(secretKey), nil
-//	})
-//	if err != nil {
-//		log.Err("failed parse with claims tokenString: ", err)
-//		return ""
-//	}
-//	if !token.Valid {
-//		log.Err("Token is not valid: ", token)
-//		return ""
-//	}
-//
-//	return claims.UserID
-//}
+func (s *Service) RegisterUser(ctx context.Context, user *register.Request) (string, error) {
+	encrypted, err := encrypt(s.Config.Secret.SecretKey, user.Password)
+	if err != nil {
+		return "", fmt.Errorf("failed encrypt user password: %w", err)
+	}
+	user.Password = encrypted
+
+	userID, err := s.Storage.SaveUser(ctx, user)
+	if err != nil {
+		return "", fmt.Errorf("failed register user: %w", err)
+	}
+
+	authToken, err := buildJWTString(s.Config.Secret.SecretKey, userID)
+	if err != nil {
+		return "", fmt.Errorf("failed generate authorization token: %w", err)
+	}
+
+	return authToken, nil
+}
+
+func (s *Service) LoginUser(ctx context.Context, user *register.Request) (string, error) {
+	fromDB, err := s.Storage.GetUser(ctx, user.Login)
+	if err != nil {
+		return "", fmt.Errorf("failed get user from DB: %w", err)
+	}
+
+	if err := decryptAndCompare(s.Config.Secret.SecretKey, fromDB.Password, user.Password); err != nil {
+		return "", storage.ErrIncorrectPassword
+	}
+	authToken, err := buildJWTString(s.Config.Secret.SecretKey, fromDB.ID)
+	if err != nil {
+		return "", fmt.Errorf("failed generate authToken: %w", err)
+	}
+
+	return authToken, nil
+}

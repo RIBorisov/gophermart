@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/RIBorisov/gophermart/internal/config"
@@ -14,7 +15,8 @@ import (
 )
 
 type Store interface {
-	Register(ctx context.Context, user *register.Request) (string, error)
+	SaveUser(ctx context.Context, user *register.Request) (string, error)
+	GetUser(ctx context.Context, login string) (UserRow, error)
 }
 
 type DB struct {
@@ -23,7 +25,16 @@ type DB struct {
 	log *logger.Log
 }
 
-func (d *DB) Register(ctx context.Context, user *register.Request) (string, error) {
+func LoadStorage(ctx context.Context, cfg *config.Config, log *logger.Log) (Store, error) {
+	pool, err := NewPool(ctx, cfg.Service.DatabaseDSN, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed acquire new db pool: %w", err)
+	}
+	return &DB{pool, cfg, log}, nil
+
+}
+
+func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, error) {
 	const (
 		insertStmt        = "INSERT INTO users (login, password) VALUES ($1, $2) RETURNING id"
 		loginShouldBeUniq = "idx_login_is_unique"
@@ -45,16 +56,33 @@ func (d *DB) Register(ctx context.Context, user *register.Request) (string, erro
 	return userID, nil
 }
 
-func LoadStorage(ctx context.Context, cfg *config.Config, log *logger.Log) (Store, error) {
-	pool, err := NewPool(ctx, cfg.Service.DatabaseDSN, log)
-	if err != nil {
-		return nil, fmt.Errorf("failed acquire new db pool: %w", err)
-	}
-	return &DB{pool, cfg, log}, nil
+type UserRow struct {
+	ID       string `db:"id"`
+	Login    string `db:"login"`
+	Password string `db:"password"`
+	//CreatedAt string `db:"created_at"` // TODO: пока не уверен что нужно поле
+}
 
+func (d *DB) GetUser(ctx context.Context, login string) (UserRow, error) {
+	const getStmt = "SELECT id, login, password FROM users WHERE login = $1"
+	row := d.pool.QueryRow(ctx, getStmt, login)
+	var (
+		userRow   UserRow
+		passBytes []byte
+	)
+	if err := row.Scan(&userRow.ID, &userRow.Login, &passBytes); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return UserRow{}, ErrUserNotExists
+		}
+		return UserRow{}, fmt.Errorf("failed scan row: %w", err)
+	}
+	userRow.Password = string(passBytes)
+
+	return userRow, nil
 }
 
 var (
 	ErrUserExists        = errors.New("user already exists")
 	ErrIncorrectPassword = errors.New("invalid password")
+	ErrUserNotExists     = errors.New("user not exists")
 )
