@@ -3,11 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-playground/validator"
 
-	"github.com/RIBorisov/gophermart/internal/models"
+	"github.com/RIBorisov/gophermart/internal/models/register"
 	"github.com/RIBorisov/gophermart/internal/service"
 	"github.com/RIBorisov/gophermart/internal/storage"
 )
@@ -15,7 +16,7 @@ import (
 func Register(svc *service.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		var user *models.RegisterRequest
+		var user *register.Request
 		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
 			svc.Log.Err("failed decode register request", err)
 			http.Error(w, "", http.StatusInternalServerError)
@@ -39,5 +40,16 @@ func Register(svc *service.Service) http.HandlerFunc {
 		}
 		w.Header().Set("Authorization", "Bearer "+authToken)
 		w.WriteHeader(http.StatusOK)
+		msg := fmt.Sprintf("Successfully registered user with name '%s'", user.Login)
+		resp := register.Response{
+			Success: true,
+			Details: msg,
+		}
+
+		if err = json.NewEncoder(w).Encode(resp); err != nil {
+			svc.Log.Err("failed encode response", err)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
 	}
 }

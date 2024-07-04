@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/RIBorisov/gophermart/internal/config"
-	"github.com/RIBorisov/gophermart/internal/logger"
-	"github.com/RIBorisov/gophermart/internal/models"
+
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/RIBorisov/gophermart/internal/config"
+	"github.com/RIBorisov/gophermart/internal/logger"
+	"github.com/RIBorisov/gophermart/internal/models/register"
 )
 
 type Store interface {
-	Register(ctx context.Context, user *models.RegisterRequest) (string, error)
+	Register(ctx context.Context, user *register.Request) (string, error)
 }
 
 type DB struct {
@@ -21,7 +23,7 @@ type DB struct {
 	log *logger.Log
 }
 
-func (d *DB) Register(ctx context.Context, user *models.RegisterRequest) (string, error) {
+func (d *DB) Register(ctx context.Context, user *register.Request) (string, error) {
 	const (
 		insertStmt        = "INSERT INTO users (login, password) VALUES ($1, $2) RETURNING id"
 		loginShouldBeUniq = "idx_login_is_unique"

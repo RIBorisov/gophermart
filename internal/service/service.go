@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"github.com/RIBorisov/gophermart/internal/config"
 	"github.com/RIBorisov/gophermart/internal/logger"
-	"github.com/RIBorisov/gophermart/internal/models"
+	"github.com/RIBorisov/gophermart/internal/models/register"
 	"github.com/RIBorisov/gophermart/internal/storage"
 	"github.com/golang-jwt/jwt/v4"
 	"time"
@@ -20,7 +20,7 @@ type Service struct {
 	Config  *config.Config
 }
 
-func (s *Service) RegisterUser(ctx context.Context, user *models.RegisterRequest) (string, error) {
+func (s *Service) RegisterUser(ctx context.Context, user *register.Request) (string, error) {
 	encrypted, err := encrypt(s.Config.Secret.SecretKey, user.Password)
 	if err != nil {
 		return "", fmt.Errorf("failed encrypt user password: %w", err)
