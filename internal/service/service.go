@@ -11,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/RIBorisov/gophermart/internal/config"
+	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
 	"github.com/RIBorisov/gophermart/internal/models/register"
 	"github.com/RIBorisov/gophermart/internal/storage"
@@ -47,20 +48,20 @@ func decryptAndCompare(secret, encodedData, password string) error {
 
 	// сравниваем хеши, если !ok, то неверный пароль
 	if !hmac.Equal(decodedBytes, expectedHash) {
-		return storage.ErrIncorrectPassword
+		return errs.ErrIncorrectPassword
 	}
 	return nil
 }
 
-type сlaims struct {
+type Claims struct {
 	jwt.RegisteredClaims
 	UserID string
 }
 
-func buildJWTString(secretKey string, userID string) (string, error) {
+func (s *Service) BuildJWTString(secretKey string, userID string) (string, error) {
 	const tokenExp = time.Hour * 720
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, сlaims{
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExp)),
 		},
@@ -87,7 +88,7 @@ func (s *Service) RegisterUser(ctx context.Context, user *register.Request) (str
 		return "", fmt.Errorf("failed register user: %w", err)
 	}
 
-	authToken, err := buildJWTString(s.Config.Secret.SecretKey, userID)
+	authToken, err := s.BuildJWTString(s.Config.Secret.SecretKey, userID)
 	if err != nil {
 		return "", fmt.Errorf("failed generate authorization token: %w", err)
 	}
@@ -102,12 +103,20 @@ func (s *Service) LoginUser(ctx context.Context, user *register.Request) (string
 	}
 
 	if err := decryptAndCompare(s.Config.Secret.SecretKey, fromDB.Password, user.Password); err != nil {
-		return "", storage.ErrIncorrectPassword
+		return "", errs.ErrIncorrectPassword
 	}
-	authToken, err := buildJWTString(s.Config.Secret.SecretKey, fromDB.ID)
+	authToken, err := s.BuildJWTString(s.Config.Secret.SecretKey, fromDB.ID)
 	if err != nil {
 		return "", fmt.Errorf("failed generate authToken: %w", err)
 	}
 
 	return authToken, nil
+}
+
+func (s *Service) CreateOrder(ctx context.Context, orderNo string) error {
+	if err := s.Storage.SaveOrder(ctx, orderNo); err != nil {
+		return fmt.Errorf("failed save order: %w", err)
+	}
+
+	return nil
 }

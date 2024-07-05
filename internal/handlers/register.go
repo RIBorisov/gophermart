@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/models/register"
 	"github.com/RIBorisov/gophermart/internal/service"
-	"github.com/RIBorisov/gophermart/internal/storage"
 )
 
 func Register(svc *service.Service) http.HandlerFunc {
@@ -37,7 +37,7 @@ func Register(svc *service.Service) http.HandlerFunc {
 		authToken, err := svc.RegisterUser(ctx, user)
 
 		if err != nil {
-			if errors.Is(err, storage.ErrUserExists) {
+			if errors.Is(err, errs.ErrUserExists) {
 				http.Error(w, "User already exists", http.StatusConflict)
 				return
 			} else {

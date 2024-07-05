@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/models/login"
 	"github.com/RIBorisov/gophermart/internal/models/register"
 	"github.com/RIBorisov/gophermart/internal/service"
-	"github.com/RIBorisov/gophermart/internal/storage"
 )
 
 func Login(svc *service.Service) http.HandlerFunc {
@@ -43,7 +43,7 @@ func Login(svc *service.Service) http.HandlerFunc {
 
 		authToken, err := svc.LoginUser(ctx, user)
 		if err != nil {
-			if errors.Is(err, storage.ErrUserNotExists) || errors.Is(err, storage.ErrIncorrectPassword) {
+			if errors.Is(err, errs.ErrUserNotExists) || errors.Is(err, errs.ErrIncorrectPassword) {
 				response.Success = false
 				response.Details = fmt.Sprint("Invalid login and (or) password")
 			} else {

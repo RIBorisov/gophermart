@@ -10,13 +10,16 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/RIBorisov/gophermart/internal/config"
+	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
+	"github.com/RIBorisov/gophermart/internal/models"
 	"github.com/RIBorisov/gophermart/internal/models/register"
 )
 
 type Store interface {
 	SaveUser(ctx context.Context, user *register.Request) (string, error)
 	GetUser(ctx context.Context, login string) (UserRow, error)
+	SaveOrder(ctx context.Context, orderNo string) error
 }
 
 type DB struct {
@@ -36,7 +39,7 @@ func LoadStorage(ctx context.Context, cfg *config.Config, log *logger.Log) (Stor
 
 func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, error) {
 	const (
-		insertStmt        = "INSERT INTO users (login, password) VALUES ($1, $2) RETURNING id"
+		insertStmt        = `INSERT INTO users (login, password) VALUES ($1, $2) RETURNING user_id`
 		loginShouldBeUniq = "idx_login_is_unique"
 	)
 
@@ -47,7 +50,7 @@ func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, erro
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			if pgErr.ConstraintName == loginShouldBeUniq {
-				return "", ErrUserExists
+				return "", errs.ErrUserExists
 			}
 		}
 		return "", fmt.Errorf("failed query row request: %w", err)
@@ -57,14 +60,13 @@ func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, erro
 }
 
 type UserRow struct {
-	ID       string `db:"id"`
+	ID       string `db:"user_id"`
 	Login    string `db:"login"`
 	Password string `db:"password"`
-	//CreatedAt string `db:"created_at"` // TODO: пока не уверен что нужно поле
 }
 
 func (d *DB) GetUser(ctx context.Context, login string) (UserRow, error) {
-	const getStmt = "SELECT id, login, password FROM users WHERE login = $1"
+	const getStmt = `SELECT user_id, login, password FROM users WHERE login = $1`
 	row := d.pool.QueryRow(ctx, getStmt, login)
 	var (
 		userRow   UserRow
@@ -72,7 +74,7 @@ func (d *DB) GetUser(ctx context.Context, login string) (UserRow, error) {
 	)
 	if err := row.Scan(&userRow.ID, &userRow.Login, &passBytes); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return UserRow{}, ErrUserNotExists
+			return UserRow{}, errs.ErrUserNotExists
 		}
 		return UserRow{}, fmt.Errorf("failed scan row: %w", err)
 	}
@@ -81,8 +83,42 @@ func (d *DB) GetUser(ctx context.Context, login string) (UserRow, error) {
 	return userRow, nil
 }
 
-var (
-	ErrUserExists        = errors.New("user already exists")
-	ErrIncorrectPassword = errors.New("invalid password")
-	ErrUserNotExists     = errors.New("user not exists")
-)
+// SaveOrder checks if order already registered and returns corresponding error
+// otherwise saving the new order
+func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
+	const (
+		insertStmt = `INSERT INTO orders (order_id, user_id) VALUES ($1, $2)`
+		selectStmt = `SELECT order_id, user_id FROM orders WHERE order_id = $1`
+	)
+	var existedOrderNo, userID string
+	err := d.pool.QueryRow(ctx, selectStmt, orderNo).Scan(&existedOrderNo, &userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			d.log.Debug("order number not found in db and can be stored", "orderNo", orderNo)
+		} else {
+			return fmt.Errorf("failed scan order from db: %w", err)
+		}
+	}
+
+	ctxUserID, ok := ctx.Value(models.CtxUserIDKey).(string)
+	if !ok {
+		return errs.ErrGetUserFromContext
+	}
+
+	// orderNo already in db, therefore we should return
+	// one of these errors: ErrOrderCreatedAlready, ErrAnotherUserOrderCreated
+	if existedOrderNo != "" {
+		if userID == ctxUserID {
+			return errs.ErrOrderCreatedAlready
+		}
+
+		return errs.ErrAnotherUserOrderCreated
+	}
+
+	_, err = d.pool.Exec(ctx, insertStmt, orderNo, ctxUserID)
+	if err != nil {
+		return fmt.Errorf("failed execute statement: %w", err)
+	}
+
+	return nil
+}
