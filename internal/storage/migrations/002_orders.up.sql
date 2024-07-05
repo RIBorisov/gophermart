@@ -5,8 +5,7 @@ CREATE TABLE IF NOT EXISTS orders(
     user_id UUID NOT NULL,
     status VARCHAR(10) NOT NULL CHECK (status IN ('NEW', 'PROCESSING', 'INVALID', 'PROCESSED')) DEFAULT 'NEW',
     bonus INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
+    uploaded_at TIMESTAMP DEFAULT NOW(),
 
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
