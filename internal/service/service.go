@@ -13,6 +13,7 @@ import (
 	"github.com/RIBorisov/gophermart/internal/config"
 	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
+	"github.com/RIBorisov/gophermart/internal/models/orders"
 	"github.com/RIBorisov/gophermart/internal/models/register"
 	"github.com/RIBorisov/gophermart/internal/storage"
 )
@@ -119,4 +120,22 @@ func (s *Service) CreateOrder(ctx context.Context, orderNo string) error {
 	}
 
 	return nil
+}
+
+func (s *Service) GetOrders(ctx context.Context) ([]orders.Order, error) {
+	var list []orders.Order
+	raw, err := s.Storage.GetOrders(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed get orders from storage: %w", err)
+	}
+	for _, o := range raw {
+		list = append(list, orders.Order{
+			Number:     o.OrderID,
+			Status:     o.Status,
+			Accrual:    o.Bonus,
+			UploadedAt: o.UploadedAt,
+		})
+	}
+
+	return list, nil
 }

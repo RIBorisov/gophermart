@@ -19,7 +19,7 @@ func NewRouter(svc *service.Service) *chi.Mux {
 	router.Route("/api/user", func(r chi.Router) {
 		r.Use(myMW.CheckAuth(svc).Middleware)
 		r.Post("/orders", CreateOrder(svc))
-		//GET / api / user / orders
+		r.Get("/orders", GetOrders(svc))
 		//GET / api / user / balance
 		//POST / api / user / balance / withdraw
 		//GET /api/user/withdrawals

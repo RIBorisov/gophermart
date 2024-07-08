@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/RIBorisov/gophermart/internal/models/orders"
+	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
@@ -20,6 +22,7 @@ type Store interface {
 	SaveUser(ctx context.Context, user *register.Request) (string, error)
 	GetUser(ctx context.Context, login string) (UserRow, error)
 	SaveOrder(ctx context.Context, orderNo string) error
+	GetOrders(ctx context.Context) ([]orderEntity, error)
 }
 
 type DB struct {
@@ -121,4 +124,35 @@ func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
 	}
 
 	return nil
+}
+
+type orderEntity struct {
+	OrderID    string        `db:"order_id"`
+	UserID     string        `db:"user_id"`
+	Status     orders.Status `db:"status"`
+	Bonus      int           `db:"bonus"`
+	UploadedAt time.Time     `db:"uploaded_at"`
+}
+
+func (d *DB) GetOrders(ctx context.Context) ([]orderEntity, error) {
+	const stmt = `SELECT * FROM orders WHERE user_id = $1` // ORDER BY uploaded_at DESC`
+	var orderList []orderEntity
+	fmt.Println(orderList)
+	ctxUserID, ok := ctx.Value(models.CtxUserIDKey).(string)
+	if !ok {
+		return nil, errs.ErrGetUserFromContext
+	}
+	rows, err := d.pool.Query(ctx, stmt, ctxUserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed query: %w", err)
+	}
+	for rows.Next() {
+		var o orderEntity
+		if err = rows.Scan(&o.OrderID, &o.UserID, &o.Status, &o.Bonus, &o.UploadedAt); err != nil {
+			return nil, fmt.Errorf("failed scan into order entity: %w", err)
+		}
+		orderList = append(orderList, o)
+	}
+
+	return orderList, nil
 }

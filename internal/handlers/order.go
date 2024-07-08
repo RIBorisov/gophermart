@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -43,5 +44,32 @@ func CreateOrder(svc *service.Service) http.HandlerFunc {
 		}
 		svc.Log.Info("Successfully loaded order", "number", string(orderNo))
 		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+func GetOrders(svc *service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		list, err := svc.GetOrders(ctx)
+		if err != nil {
+			svc.Log.Err("failed get orders", err)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
+
+		if len(list) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err = json.NewEncoder(w).Encode(list); err != nil {
+			svc.Log.Err("failed encode response", err)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 	}
 }
