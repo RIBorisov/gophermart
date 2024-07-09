@@ -147,5 +147,5 @@ func (s *Service) GetBalance(ctx context.Context) (balance.Response, error) {
 		return balance.Response{}, fmt.Errorf("failed get balance from storage: %w", err)
 	}
 
-	return balance.Response{Current: raw.Current, Withdrawn: raw.Current}, nil
+	return balance.Response{Current: raw.Current, Withdrawn: raw.Withdrawn}, nil
 }
