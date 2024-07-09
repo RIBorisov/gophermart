@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/RIBorisov/gophermart/internal/errs"
@@ -44,7 +43,7 @@ func Login(svc *service.Service) http.HandlerFunc {
 		if err != nil {
 			if errors.Is(err, errs.ErrUserNotExists) || errors.Is(err, errs.ErrIncorrectPassword) {
 				response.Success = false
-				response.Details = fmt.Sprint("Invalid login and (or) password")
+				response.Details = "Invalid login and (or) password"
 			} else {
 				svc.Log.Err("failed login user", err)
 				http.Error(w, "", http.StatusInternalServerError)
