@@ -10,4 +10,5 @@ var (
 	ErrAnotherUserOrderCreated = errors.New("order number already created by another user")
 	ErrGetUserFromContext      = errors.New("failed get userID from context")
 	ErrInsufficientFunds       = errors.New("insufficient funds")
+	ErrNoWithdrawals           = errors.New("user has no withdrawals yet")
 )

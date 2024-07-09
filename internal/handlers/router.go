@@ -22,9 +22,8 @@ func NewRouter(svc *service.Service) *chi.Mux {
 		r.Get("/orders", GetOrders(svc))
 		r.Get("/balance", CurrentBalance(svc))
 		r.Post("/balance/withdraw", BalanceWithdraw(svc))
-		//GET /api/user/withdrawals
+		r.Get("/withdrawals", Withdrawals(svc))
 	})
 
-	//router.Get("/", DraftHandler(svc.Log))
 	return router
 }

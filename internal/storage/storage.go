@@ -26,6 +26,7 @@ type Store interface {
 	GetOrders(ctx context.Context) ([]orderEntity, error)
 	GetBalance(ctx context.Context) (*BalanceEntity, error)
 	BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) error
+	GetWithdrawals(ctx context.Context) ([]withdrawalsEntity, error)
 }
 
 type DB struct {
@@ -246,4 +247,36 @@ func (d *DB) BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) e
 	}
 
 	return nil
+}
+
+type withdrawalsEntity struct {
+	UserID      string    `db:"user_id"`
+	OrderID     string    `db:"order_id"`
+	Amount      float64   `db:"amount"`
+	ProcessedAt time.Time `db:"processed_at"`
+}
+
+func (d *DB) GetWithdrawals(ctx context.Context) ([]withdrawalsEntity, error) {
+	const stmt = `SELECT order_id, amount, processed_at::timestamptz FROM withdrawals WHERE user_id = $1`
+
+	userID, err := getCtxUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := d.pool.Query(ctx, stmt, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed query withdrawals: %w", err)
+	}
+	var wList []withdrawalsEntity
+	for rows.Next() {
+		var row withdrawalsEntity
+
+		if err = rows.Scan(&row.OrderID, &row.Amount, &row.ProcessedAt); err != nil {
+			return nil, fmt.Errorf("failed scan withdrawals row: %w", err)
+		}
+
+		wList = append(wList, row)
+	}
+
+	return wList, nil
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -155,4 +156,29 @@ func (s *Service) BalanceWithdraw(ctx context.Context, withdraw balance.Withdraw
 		return fmt.Errorf("failed make balance withdraw request: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) GetWithdrawals(ctx context.Context) ([]balance.Withdrawal, error) {
+	raw, err := s.Storage.GetWithdrawals(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(raw) == 0 {
+		return nil, errs.ErrNoWithdrawals
+	}
+
+	var wList []balance.Withdrawal
+	for _, row := range raw {
+		fTime, err := time.Parse(time.RFC3339, row.ProcessedAt.Format(time.RFC3339))
+		if err != nil {
+			return nil, fmt.Errorf("failed parse time into RFC3339: %w", err)
+		}
+		wList = append(wList, balance.Withdrawal{Order: row.OrderID, Sum: row.Amount, ProcessedAt: fTime})
+	}
+	sort.SliceStable(wList, func(i, j int) bool {
+		return wList[i].ProcessedAt.After(wList[j].ProcessedAt)
+	})
+
+	return wList, nil
 }
