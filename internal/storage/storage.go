@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/RIBorisov/gophermart/internal/models/orders"
 	"time"
 
 	"github.com/jackc/pgerrcode"
@@ -15,14 +14,16 @@ import (
 	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
 	"github.com/RIBorisov/gophermart/internal/models"
+	"github.com/RIBorisov/gophermart/internal/models/orders"
 	"github.com/RIBorisov/gophermart/internal/models/register"
 )
 
 type Store interface {
 	SaveUser(ctx context.Context, user *register.Request) (string, error)
-	GetUser(ctx context.Context, login string) (UserRow, error)
+	GetUser(ctx context.Context, login string) (*UserRow, error)
 	SaveOrder(ctx context.Context, orderNo string) error
 	GetOrders(ctx context.Context) ([]orderEntity, error)
+	GetBalance(ctx context.Context) (*BalanceEntity, error)
 }
 
 type DB struct {
@@ -38,6 +39,14 @@ func LoadStorage(ctx context.Context, cfg *config.Config, log *logger.Log) (Stor
 	}
 	return &DB{pool, cfg, log}, nil
 
+}
+
+func getCtxUserID(ctx context.Context) (string, error) {
+	ctxUserID, ok := ctx.Value(models.CtxUserIDKey).(string)
+	if !ok {
+		return "", errs.ErrGetUserFromContext
+	}
+	return ctxUserID, nil
 }
 
 func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, error) {
@@ -68,22 +77,22 @@ type UserRow struct {
 	Password string `db:"password"`
 }
 
-func (d *DB) GetUser(ctx context.Context, login string) (UserRow, error) {
+func (d *DB) GetUser(ctx context.Context, login string) (*UserRow, error) {
 	const getStmt = `SELECT user_id, login, password FROM users WHERE login = $1`
 	row := d.pool.QueryRow(ctx, getStmt, login)
 	var (
-		userRow   UserRow
+		uRow      UserRow
 		passBytes []byte
 	)
-	if err := row.Scan(&userRow.ID, &userRow.Login, &passBytes); err != nil {
+	if err := row.Scan(&uRow.ID, &uRow.Login, &passBytes); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return UserRow{}, errs.ErrUserNotExists
+			return nil, errs.ErrUserNotExists
 		}
-		return UserRow{}, fmt.Errorf("failed scan row: %w", err)
+		return nil, fmt.Errorf("failed scan row: %w", err)
 	}
-	userRow.Password = string(passBytes)
+	uRow.Password = string(passBytes)
 
-	return userRow, nil
+	return &uRow, nil
 }
 
 // SaveOrder checks if order already registered and returns corresponding error
@@ -93,8 +102,8 @@ func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
 		insertStmt = `INSERT INTO orders (order_id, user_id) VALUES ($1, $2)`
 		selectStmt = `SELECT order_id, user_id FROM orders WHERE order_id = $1`
 	)
-	var existedOrderNo, userID string
-	err := d.pool.QueryRow(ctx, selectStmt, orderNo).Scan(&existedOrderNo, &userID)
+	var existedOrderNo, existedUserID string
+	err := d.pool.QueryRow(ctx, selectStmt, orderNo).Scan(&existedOrderNo, &existedUserID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			d.log.Debug("order number not found in db and can be stored", "orderNo", orderNo)
@@ -103,22 +112,22 @@ func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
 		}
 	}
 
-	ctxUserID, ok := ctx.Value(models.CtxUserIDKey).(string)
-	if !ok {
-		return errs.ErrGetUserFromContext
+	userID, err := getCtxUserID(ctx)
+	if err != nil {
+		return err
 	}
 
 	// orderNo already in db, therefore we should return
 	// one of these errors: ErrOrderCreatedAlready, ErrAnotherUserOrderCreated
 	if existedOrderNo != "" {
-		if userID == ctxUserID {
+		if userID == existedUserID {
 			return errs.ErrOrderCreatedAlready
 		}
 
 		return errs.ErrAnotherUserOrderCreated
 	}
 
-	_, err = d.pool.Exec(ctx, insertStmt, orderNo, ctxUserID)
+	_, err = d.pool.Exec(ctx, insertStmt, orderNo, userID)
 	if err != nil {
 		return fmt.Errorf("failed execute statement: %w", err)
 	}
@@ -135,14 +144,14 @@ type orderEntity struct {
 }
 
 func (d *DB) GetOrders(ctx context.Context) ([]orderEntity, error) {
-	const stmt = `SELECT * FROM orders WHERE user_id = $1` // ORDER BY uploaded_at DESC`
-	var orderList []orderEntity
-	fmt.Println(orderList)
-	ctxUserID, ok := ctx.Value(models.CtxUserIDKey).(string)
-	if !ok {
-		return nil, errs.ErrGetUserFromContext
+	const stmt = `SELECT * FROM orders WHERE user_id = $1`
+	var oList []orderEntity
+
+	userID, err := getCtxUserID(ctx)
+	if err != nil {
+		return nil, err
 	}
-	rows, err := d.pool.Query(ctx, stmt, ctxUserID)
+	rows, err := d.pool.Query(ctx, stmt, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed query: %w", err)
 	}
@@ -151,8 +160,33 @@ func (d *DB) GetOrders(ctx context.Context) ([]orderEntity, error) {
 		if err = rows.Scan(&o.OrderID, &o.UserID, &o.Status, &o.Bonus, &o.UploadedAt); err != nil {
 			return nil, fmt.Errorf("failed scan into order entity: %w", err)
 		}
-		orderList = append(orderList, o)
+		oList = append(oList, o)
 	}
 
-	return orderList, nil
+	return oList, nil
+}
+
+type BalanceEntity struct {
+	UserID      string    `db:"user_id"`
+	Current     float64   `db:"current"`
+	Withdrawn   float64   `db:"withdrawn"`
+	ProcessedAt time.Time `db:"processed_at"`
+}
+
+func (d *DB) GetBalance(ctx context.Context) (*BalanceEntity, error) {
+	const stmt = `SELECT current, withdrawn FROM balance WHERE user_id = $1`
+	userID, err := getCtxUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var b BalanceEntity
+	err = d.pool.QueryRow(ctx, stmt, userID).Scan(&b.Current, &b.Withdrawn)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errs.ErrUserNotExists
+		}
+		return nil, fmt.Errorf("failed query row: %w", err)
+	}
+	return &b, nil
 }

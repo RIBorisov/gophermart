@@ -13,6 +13,7 @@ import (
 	"github.com/RIBorisov/gophermart/internal/config"
 	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
+	"github.com/RIBorisov/gophermart/internal/models/balance"
 	"github.com/RIBorisov/gophermart/internal/models/orders"
 	"github.com/RIBorisov/gophermart/internal/models/register"
 	"github.com/RIBorisov/gophermart/internal/storage"
@@ -138,4 +139,13 @@ func (s *Service) GetOrders(ctx context.Context) ([]orders.Order, error) {
 	}
 
 	return list, nil
+}
+
+func (s *Service) GetBalance(ctx context.Context) (balance.Response, error) {
+	raw, err := s.Storage.GetBalance(ctx)
+	if err != nil {
+		return balance.Response{}, fmt.Errorf("failed get balance from storage: %w", err)
+	}
+
+	return balance.Response{Current: raw.Current, Withdrawn: raw.Current}, nil
 }
