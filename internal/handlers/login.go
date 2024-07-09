@@ -15,10 +15,9 @@ import (
 func Login(svc *service.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		msg := fmt.Sprint("Successfully logged in")
 		response := login.Response{
 			Success: true,
-			Details: msg,
+			Details: "Successfully logged in",
 		}
 		var user *register.Request
 
