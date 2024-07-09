@@ -14,6 +14,7 @@ import (
 	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
 	"github.com/RIBorisov/gophermart/internal/models"
+	"github.com/RIBorisov/gophermart/internal/models/balance"
 	"github.com/RIBorisov/gophermart/internal/models/orders"
 	"github.com/RIBorisov/gophermart/internal/models/register"
 )
@@ -24,6 +25,7 @@ type Store interface {
 	SaveOrder(ctx context.Context, orderNo string) error
 	GetOrders(ctx context.Context) ([]orderEntity, error)
 	GetBalance(ctx context.Context) (*BalanceEntity, error)
+	BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) error
 }
 
 type DB struct {
@@ -53,6 +55,7 @@ func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, erro
 	const (
 		insertStmt        = `INSERT INTO users (login, password) VALUES ($1, $2) RETURNING user_id`
 		loginShouldBeUniq = "idx_login_is_unique"
+		insertBalanceStmt = `INSERT INTO balance(user_id) VALUES ($1)`
 	)
 
 	var userID string
@@ -67,6 +70,8 @@ func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, erro
 		}
 		return "", fmt.Errorf("failed query row request: %w", err)
 	}
+
+	err = d.pool.QueryRow(ctx, insertBalanceStmt, userID).Scan(&userID)
 
 	return userID, nil
 }
@@ -167,10 +172,10 @@ func (d *DB) GetOrders(ctx context.Context) ([]orderEntity, error) {
 }
 
 type BalanceEntity struct {
-	UserID      string    `db:"user_id"`
-	Current     float64   `db:"current"`
-	Withdrawn   float64   `db:"withdrawn"`
-	ProcessedAt time.Time `db:"processed_at"`
+	UserID    string    `db:"user_id"`
+	Current   float64   `db:"current"`
+	Withdrawn float64   `db:"withdrawn"`
+	UpdatedAt time.Time `db:"updated_at"`
 }
 
 func (d *DB) GetBalance(ctx context.Context) (*BalanceEntity, error) {
@@ -189,4 +194,56 @@ func (d *DB) GetBalance(ctx context.Context) (*BalanceEntity, error) {
 		return nil, fmt.Errorf("failed query row: %w", err)
 	}
 	return &b, nil
+}
+
+func (d *DB) BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) error {
+	const (
+		selectStmt = `SELECT current FROM balance WHERE user_id = $1`
+		updateStmt = `UPDATE balance 
+					  SET current = current - @sum, withdrawn = withdrawn + @sum
+					  WHERE user_id = @userID`
+		insertWithdrawalsStmt = `INSERT INTO withdrawals (user_id, order_id, amount) VALUES (@userID, @orderID, @sum)`
+	)
+
+	userID, err := getCtxUserID(ctx)
+	if err != nil {
+		return err
+	}
+
+	var current float64
+
+	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: "read committed"})
+	if err != nil {
+		return fmt.Errorf("failed to begin tx: %w", err)
+	}
+
+	defer func() {
+		if err = tx.Rollback(ctx); err != nil {
+			d.log.Debug("failed rollback transaction", err)
+		}
+	}()
+
+	if err = tx.QueryRow(ctx, selectStmt, userID).Scan(&current); err != nil {
+		return fmt.Errorf("failed query row: %w", err)
+	}
+
+	if current < req.Sum {
+		return errs.ErrInsufficientFunds
+	}
+
+	_, err = tx.Exec(ctx, updateStmt, pgx.NamedArgs{"sum": req.Sum, "userID": userID})
+	if err != nil {
+		return fmt.Errorf("failed execute update balance stmt: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, insertWithdrawalsStmt, pgx.NamedArgs{"userID": userID, "orderID": req.Order, "sum": req.Sum})
+	if err != nil {
+		return fmt.Errorf("failed execute withdrawal request stmt: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed commit tx: %w", err)
+	}
+
+	return nil
 }

@@ -149,3 +149,10 @@ func (s *Service) GetBalance(ctx context.Context) (balance.Response, error) {
 
 	return balance.Response{Current: raw.Current, Withdrawn: raw.Withdrawn}, nil
 }
+
+func (s *Service) BalanceWithdraw(ctx context.Context, withdraw balance.WithdrawRequest) error {
+	if err := s.Storage.BalanceWithdraw(ctx, withdraw); err != nil {
+		return fmt.Errorf("failed make balance withdraw request: %w", err)
+	}
+	return nil
+}

@@ -1,10 +1,10 @@
 BEGIN TRANSACTION;
 
 CREATE TABLE IF NOT EXISTS balance(
-    user_id UUID NOT NULL,
-    current DECIMAL(10, 1) NOT NULL DEFAULT 0.0,
+    user_id UUID NOT NULL UNIQUE,
+    current DECIMAL(10, 1) NOT NULL DEFAULT 0.0 CHECK (current >= 0),
     withdrawn DECIMAL(10, 1) NOT NULL DEFAULT 0.0,
-    processed_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
 
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );

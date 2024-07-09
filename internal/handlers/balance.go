@@ -3,9 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"github.com/RIBorisov/gophermart/internal/errs"
-	"github.com/RIBorisov/gophermart/internal/service"
 	"net/http"
+
+	"github.com/RIBorisov/gophermart/internal/errs"
+	"github.com/RIBorisov/gophermart/internal/models/balance"
+	"github.com/RIBorisov/gophermart/internal/service"
 )
 
 func CurrentBalance(svc *service.Service) http.HandlerFunc {
@@ -32,9 +34,41 @@ func CurrentBalance(svc *service.Service) http.HandlerFunc {
 	}
 }
 
-// POST
 func BalanceWithdraw(svc *service.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		//ctx := r.Context()
+		ctx := r.Context()
+		var req balance.WithdrawRequest
+
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
+			svc.Log.Err("failed decode request into struct", err)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
+		defer func() {
+			if err = r.Body.Close(); err != nil {
+				svc.Log.Err("failed close request body", err)
+				http.Error(w, "", http.StatusInternalServerError)
+			}
+		}()
+
+		if err = service.ValidateLuhn(req.Order); err != nil {
+			http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
+			return
+		}
+
+		err = svc.BalanceWithdraw(ctx, req)
+		if err != nil {
+			if errors.Is(err, errs.ErrInsufficientFunds) {
+				http.Error(w, "You have insufficient funds", http.StatusPaymentRequired)
+				return
+			}
+			svc.Log.Err("failed make balance withdraw", err)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+
 	}
 }
