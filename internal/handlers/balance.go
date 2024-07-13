@@ -69,6 +69,5 @@ func BalanceWithdraw(svc *service.Service) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusOK)
-
 	}
 }

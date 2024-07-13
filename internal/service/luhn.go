@@ -14,12 +14,12 @@ const (
 	asciiTen  = 57
 )
 
-// Generate returns a valid Luhn number of the provided length
+// Generate returns a valid Luhn number of the provided length.
 func Generate(length int) string {
 	rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 
 	var s strings.Builder
-	for i := 0; i < length-1; i++ {
+	for range length - 1 {
 		s.WriteString(strconv.Itoa(rand.Intn(9)))
 	}
 
@@ -34,7 +34,7 @@ func calculateLuhnSum(number string, parity int) (int64, error) {
 			return 0, errors.New("invalid digit")
 		}
 
-		d = d - asciiZero
+		d -= asciiZero
 		if i%2 == parity {
 			d *= 2
 			if d > 9 {
@@ -52,7 +52,7 @@ func Calculate(number string) (string, string, error) {
 	p := (len(number) + 1) % 2
 	sum, err := calculateLuhnSum(number, p)
 	if err != nil {
-		return "", "", nil
+		return "", "", fmt.Errorf("failed calculate sum: %w", err)
 	}
 
 	luhn := sum % 10

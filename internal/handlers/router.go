@@ -9,7 +9,6 @@ import (
 )
 
 func NewRouter(svc *service.Service) *chi.Mux {
-
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)

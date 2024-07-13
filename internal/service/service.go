@@ -26,7 +26,7 @@ type Service struct {
 	Config  *config.Config
 }
 
-func encrypt(secret, data string) (string, error) {
+func encrypt(secret, data string) string {
 	// хешируем пароль с ключом
 	h := sha256.New()
 	h.Write([]byte(data + secret))
@@ -34,7 +34,7 @@ func encrypt(secret, data string) (string, error) {
 	// кодируем в base64 строку для хранения в бд
 	encodedPassword := base64.StdEncoding.EncodeToString(hashedPassword)
 
-	return encodedPassword, nil
+	return encodedPassword
 }
 
 func decryptAndCompare(secret, encodedData, password string) error {
@@ -80,10 +80,7 @@ func (s *Service) BuildJWTString(secretKey string, userID string) (string, error
 }
 
 func (s *Service) RegisterUser(ctx context.Context, user *register.Request) (string, error) {
-	encrypted, err := encrypt(s.Config.Secret.SecretKey, user.Password)
-	if err != nil {
-		return "", fmt.Errorf("failed encrypt user password: %w", err)
-	}
+	encrypted := encrypt(s.Config.Secret.SecretKey, user.Password)
 	user.Password = encrypted
 
 	userID, err := s.Storage.SaveUser(ctx, user)
@@ -125,7 +122,7 @@ func (s *Service) CreateOrder(ctx context.Context, orderNo string) error {
 }
 
 func (s *Service) GetOrders(ctx context.Context) ([]orders.Order, error) {
-	var list []orders.Order
+	list := make([]orders.Order, 0)
 	raw, err := s.Storage.GetOrders(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed get orders from storage: %w", err)
@@ -168,7 +165,7 @@ func (s *Service) GetWithdrawals(ctx context.Context) ([]balance.Withdrawal, err
 		return nil, errs.ErrNoWithdrawals
 	}
 
-	var wList []balance.Withdrawal
+	wList := make([]balance.Withdrawal, 0)
 	for _, row := range raw {
 		fTime, err := time.Parse(time.RFC3339, row.ProcessedAt.Format(time.RFC3339))
 		if err != nil {

@@ -67,7 +67,7 @@ type PrettyHandlerOptions struct {
 }
 
 type PrettyHandler struct {
-	opts PrettyHandlerOptions
+	// opts PrettyHandlerOptions
 	slog.Handler
 	l     *stdLog.Logger
 	attrs []slog.Attr
@@ -84,7 +84,7 @@ func (opts PrettyHandlerOptions) NewPrettyHandler(
 	return h
 }
 
-func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error {
+func (h *PrettyHandler) Handle(_ context.Context, r slog.Record) error { //nolint:gocritic //huge param passed
 	level := r.Level.String() + ":"
 
 	switch r.Level {

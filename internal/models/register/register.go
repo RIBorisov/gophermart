@@ -2,6 +2,7 @@ package register
 
 import (
 	"fmt"
+
 	"github.com/go-playground/validator"
 )
 
@@ -11,8 +12,8 @@ type Request struct {
 }
 
 type Response struct {
-	Success bool   `json:"success"`
 	Details string `json:"details"`
+	Success bool   `json:"success"`
 }
 
 func (r *Request) Validate() error {

@@ -3,8 +3,10 @@ package config
 import (
 	"errors"
 	"fmt"
-	"github.com/RIBorisov/gophermart/internal/logger"
+
 	"github.com/caarlos0/env/v11"
+
+	"github.com/RIBorisov/gophermart/internal/logger"
 )
 
 type Service struct {

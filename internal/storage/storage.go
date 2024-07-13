@@ -41,7 +41,6 @@ func LoadStorage(ctx context.Context, cfg *config.Config, log *logger.Log) (Stor
 		return nil, fmt.Errorf("failed acquire new db pool: %w", err)
 	}
 	return &DB{pool, cfg, log}, nil
-
 }
 
 func getCtxUserID(ctx context.Context) (string, error) {
@@ -72,7 +71,9 @@ func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, erro
 		return "", fmt.Errorf("failed query row request: %w", err)
 	}
 
-	err = d.pool.QueryRow(ctx, insertBalanceStmt, userID).Scan(&userID)
+	if err = d.pool.QueryRow(ctx, insertBalanceStmt, userID).Scan(&userID); err != nil {
+		return "", fmt.Errorf("failed insert balance row: %w", err)
+	}
 
 	return userID, nil
 }
@@ -87,22 +88,22 @@ func (d *DB) GetUser(ctx context.Context, login string) (*UserRow, error) {
 	const getStmt = `SELECT user_id, login, password FROM users WHERE login = $1`
 	row := d.pool.QueryRow(ctx, getStmt, login)
 	var (
-		uRow      UserRow
-		passBytes []byte
+		uRow UserRow
+		pass []byte
 	)
-	if err := row.Scan(&uRow.ID, &uRow.Login, &passBytes); err != nil {
+	if err := row.Scan(&uRow.ID, &uRow.Login, &pass); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrUserNotExists
 		}
 		return nil, fmt.Errorf("failed scan row: %w", err)
 	}
-	uRow.Password = string(passBytes)
+	uRow.Password = string(pass)
 
 	return &uRow, nil
 }
 
 // SaveOrder checks if order already registered and returns corresponding error
-// otherwise saving the new order
+// otherwise saving the new order.
 func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
 	const (
 		insertStmt = `INSERT INTO orders (order_id, user_id) VALUES ($1, $2)`
@@ -142,11 +143,11 @@ func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
 }
 
 type orderEntity struct {
+	Status     orders.Status `db:"status"`
+	UploadedAt time.Time     `db:"uploaded_at"`
 	OrderID    string        `db:"order_id"`
 	UserID     string        `db:"user_id"`
-	Status     orders.Status `db:"status"`
 	Bonus      int           `db:"bonus"`
-	UploadedAt time.Time     `db:"uploaded_at"`
 }
 
 func (d *DB) GetOrders(ctx context.Context) ([]orderEntity, error) {
@@ -173,10 +174,10 @@ func (d *DB) GetOrders(ctx context.Context) ([]orderEntity, error) {
 }
 
 type BalanceEntity struct {
+	UpdatedAt time.Time `db:"updated_at"`
 	UserID    string    `db:"user_id"`
 	Current   float64   `db:"current"`
 	Withdrawn float64   `db:"withdrawn"`
-	UpdatedAt time.Time `db:"updated_at"`
 }
 
 func (d *DB) GetBalance(ctx context.Context) (*BalanceEntity, error) {
@@ -250,10 +251,10 @@ func (d *DB) BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) e
 }
 
 type withdrawalsEntity struct {
+	ProcessedAt time.Time `db:"processed_at"`
 	UserID      string    `db:"user_id"`
 	OrderID     string    `db:"order_id"`
 	Amount      float64   `db:"amount"`
-	ProcessedAt time.Time `db:"processed_at"`
 }
 
 func (d *DB) GetWithdrawals(ctx context.Context) ([]withdrawalsEntity, error) {
