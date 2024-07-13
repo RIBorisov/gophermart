@@ -71,7 +71,7 @@ func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, erro
 		return "", fmt.Errorf("failed query row request: %w", err)
 	}
 
-	if err = d.pool.QueryRow(ctx, insertBalanceStmt, userID).Scan(&userID); err != nil {
+	if _, err = d.pool.Exec(ctx, insertBalanceStmt, userID); err != nil {
 		return "", fmt.Errorf("failed insert balance row: %w", err)
 	}
 
