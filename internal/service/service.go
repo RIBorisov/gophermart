@@ -132,6 +132,9 @@ func (s *Service) GetUserOrders(ctx context.Context) ([]orders.Order, error) {
 			UploadedAt: o.UploadedAt,
 		})
 	}
+	sort.SliceStable(list, func(i, j int) bool {
+		return list[i].UploadedAt.After(list[j].UploadedAt)
+	})
 
 	return list, nil
 }
