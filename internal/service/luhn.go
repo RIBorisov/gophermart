@@ -2,30 +2,12 @@ package service
 
 import (
 	"errors"
-	"fmt"
-	"math/rand"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (
 	asciiZero = 48
 	asciiTen  = 57
 )
-
-// Generate returns a valid Luhn number of the provided length.
-func Generate(length int) string {
-	rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-
-	var s strings.Builder
-	for range length - 1 {
-		s.WriteString(strconv.Itoa(rand.Intn(9)))
-	}
-
-	_, res, _ := Calculate(s.String())
-	return res
-}
 
 func calculateLuhnSum(number string, parity int) (int64, error) {
 	var sum int64
@@ -46,21 +28,6 @@ func calculateLuhnSum(number string, parity int) (int64, error) {
 	}
 
 	return sum, nil
-}
-
-func Calculate(number string) (string, string, error) {
-	p := (len(number) + 1) % 2
-	sum, err := calculateLuhnSum(number, p)
-	if err != nil {
-		return "", "", fmt.Errorf("failed calculate sum: %w", err)
-	}
-
-	luhn := sum % 10
-	if luhn != 0 {
-		luhn = 10 - luhn
-	}
-
-	return strconv.FormatInt(luhn, 10), fmt.Sprintf("%s%d", number, luhn), nil
 }
 
 func ValidateLuhn(number string) error {
