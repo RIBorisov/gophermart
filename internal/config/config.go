@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/caarlos0/env/v11"
 
@@ -10,9 +11,11 @@ import (
 )
 
 type Service struct {
-	RunAddress           string `env:"RUN_ADDRESS" envDefault:"localhost:8089"`
-	AccrualSystemAddress string `env:"ACCRUAL_SYSTEM_ADDRESS" envDefault:":8080"`
-	DatabaseDSN          string `env:"DATABASE_URI" envDefault:""`
+	RunAddress            string        `env:"RUN_ADDRESS" envDefault:"localhost:8089"`
+	AccrualSystemAddress  string        `env:"ACCRUAL_SYSTEM_ADDRESS" envDefault:"http://localhost:8080"`
+	AccrualOrderInfoRoute string        `env:"ACCRUAL_ORDER_INFO_ROUTE" envDefault:"/api/orders/{orderID}"`
+	DatabaseDSN           string        `env:"DATABASE_URI" envDefault:""`
+	AccrualPollInterval   time.Duration `env:"ACCRUAL_POLL_INTERVAL" envDefault:"10s"`
 }
 
 type Secret struct {
@@ -20,8 +23,8 @@ type Secret struct {
 }
 
 type Config struct {
-	Service Service
 	Secret  Secret
+	Service Service
 }
 
 func LoadConfig(_ *logger.Log) (*Config, error) {

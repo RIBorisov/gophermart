@@ -51,7 +51,7 @@ func GetOrders(svc *service.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		list, err := svc.GetOrders(ctx)
+		list, err := svc.GetUserOrders(ctx)
 		if err != nil {
 			svc.Log.Err("failed get orders", err)
 			http.Error(w, "", http.StatusInternalServerError)

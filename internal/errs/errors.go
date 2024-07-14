@@ -11,4 +11,5 @@ var (
 	ErrGetUserFromContext      = errors.New("failed get userID from context")
 	ErrInsufficientFunds       = errors.New("insufficient funds")
 	ErrNoWithdrawals           = errors.New("user has no withdrawals yet")
+	ErrInvalidAccrualStatus    = errors.New("unexpected accrual status")
 )

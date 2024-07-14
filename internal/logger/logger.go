@@ -62,6 +62,10 @@ func (l *Log) Debug(msg string, args ...any) {
 	l.Logger.Debug(msg, args...)
 }
 
+func (l *Log) Warn(msg string, args ...any) {
+	l.Logger.Warn(msg, args...)
+}
+
 type PrettyHandlerOptions struct {
 	SlogOpts *slog.HandlerOptions
 }

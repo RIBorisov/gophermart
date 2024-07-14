@@ -9,11 +9,13 @@ import (
 	"sort"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/RIBorisov/gophermart/internal/config"
 	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
+	accmodels "github.com/RIBorisov/gophermart/internal/models/accrual"
 	"github.com/RIBorisov/gophermart/internal/models/balance"
 	"github.com/RIBorisov/gophermart/internal/models/orders"
 	"github.com/RIBorisov/gophermart/internal/models/register"
@@ -27,29 +29,24 @@ type Service struct {
 }
 
 func encrypt(secret, data string) string {
-	// хешируем пароль с ключом
 	h := sha256.New()
 	h.Write([]byte(data + secret))
 	hashedPassword := h.Sum(nil)
-	// кодируем в base64 строку для хранения в бд
 	encodedPassword := base64.StdEncoding.EncodeToString(hashedPassword)
 
 	return encodedPassword
 }
 
 func decryptAndCompare(secret, encodedData, password string) error {
-	// декодируем закодированную строку
 	decodedBytes, err := base64.StdEncoding.DecodeString(encodedData)
 	if err != nil {
 		return fmt.Errorf("failed to decode encoded data: %w", err)
 	}
 
-	// вычисляем хеш
 	h := sha256.New()
 	h.Write([]byte(password + secret))
 	expectedHash := h.Sum(nil)
 
-	// сравниваем хеши, если !ok, то неверный пароль
 	if !hmac.Equal(decodedBytes, expectedHash) {
 		return errs.ErrIncorrectPassword
 	}
@@ -121,9 +118,9 @@ func (s *Service) CreateOrder(ctx context.Context, orderNo string) error {
 	return nil
 }
 
-func (s *Service) GetOrders(ctx context.Context) ([]orders.Order, error) {
+func (s *Service) GetUserOrders(ctx context.Context) ([]orders.Order, error) {
 	list := make([]orders.Order, 0)
-	raw, err := s.Storage.GetOrders(ctx)
+	raw, err := s.Storage.GetUserOrders(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed get orders from storage: %w", err)
 	}
@@ -178,4 +175,50 @@ func (s *Service) GetWithdrawals(ctx context.Context) ([]balance.Withdrawal, err
 	})
 
 	return wList, nil
+}
+
+func (s *Service) GetOrdersForProcessing(ctx context.Context) ([]string, error) {
+	oList, err := s.Storage.GetOrdersList(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return oList, nil
+}
+
+func (s *Service) FetchOrderInfo(
+	ctx context.Context,
+	client *resty.Client,
+	orderNo string,
+) (*accmodels.OrderInfoResponse, error) {
+	var updatedInfo accmodels.OrderInfoResponse
+
+	url := s.Config.Service.AccrualSystemAddress + s.Config.Service.AccrualOrderInfoRoute
+	resp, err := client.R().
+		SetContext(ctx).
+		SetPathParam("orderID", orderNo).
+		SetResult(&updatedInfo).
+		Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed make request to accrual: %w", err)
+	}
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("got unexpected request error: %s", resp.Error())
+	}
+	return &updatedInfo, nil
+}
+
+func (s *Service) UpdateOrder(ctx context.Context, data *accmodels.OrderInfoResponse) error {
+	status, err := data.Status.ConvertToOrderStatus()
+	if err != nil {
+		return fmt.Errorf("failed convert to order status: %w", err)
+	}
+
+	updData := &orders.UpdateOrder{Status: status, Number: data.Order, Accrual: data.Accrual}
+
+	if err = s.Storage.UpdateOrder(ctx, updData); err != nil {
+		return fmt.Errorf("failed update order: '%v', details: %w", data.Order, err)
+	}
+
+	return nil
 }

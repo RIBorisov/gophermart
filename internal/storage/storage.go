@@ -23,10 +23,13 @@ type Store interface {
 	SaveUser(ctx context.Context, user *register.Request) (string, error)
 	GetUser(ctx context.Context, login string) (*UserRow, error)
 	SaveOrder(ctx context.Context, orderNo string) error
-	GetOrders(ctx context.Context) ([]orderEntity, error)
+	GetUserOrders(ctx context.Context) ([]orderEntity, error)
 	GetBalance(ctx context.Context) (*BalanceEntity, error)
 	BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) error
 	GetWithdrawals(ctx context.Context) ([]withdrawalsEntity, error)
+	GetOrdersList(ctx context.Context) ([]string, error)
+	UpdateOrder(ctx context.Context, data *orders.UpdateOrder) error
+	ClosePool() error
 }
 
 type DB struct {
@@ -51,6 +54,11 @@ func getCtxUserID(ctx context.Context) (string, error) {
 	return ctxUserID, nil
 }
 
+func (d *DB) ClosePool() error {
+	d.pool.Close()
+	return nil
+}
+
 func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, error) {
 	const (
 		insertStmt        = `INSERT INTO users (login, password) VALUES ($1, $2) RETURNING user_id`
@@ -59,8 +67,19 @@ func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, erro
 	)
 
 	var userID string
-	row := d.pool.QueryRow(ctx, insertStmt, user.Login, user.Password)
-	err := row.Scan(&userID)
+
+	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: "read committed"})
+	if err != nil {
+		return "", fmt.Errorf("failed begin tx: %w", err)
+	}
+
+	defer func() {
+		if err = tx.Rollback(ctx); err != nil {
+			d.log.Warn("failed rollback transaction", "txError", err)
+		}
+	}()
+
+	err = tx.QueryRow(ctx, insertStmt, user.Login, user.Password).Scan(&userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
@@ -71,8 +90,12 @@ func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, erro
 		return "", fmt.Errorf("failed query row request: %w", err)
 	}
 
-	if _, err = d.pool.Exec(ctx, insertBalanceStmt, userID); err != nil {
+	if _, err = tx.Exec(ctx, insertBalanceStmt, userID); err != nil {
 		return "", fmt.Errorf("failed insert balance row: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("failed commit tx: %w", err)
 	}
 
 	return userID, nil
@@ -147,10 +170,10 @@ type orderEntity struct {
 	UploadedAt time.Time     `db:"uploaded_at"`
 	OrderID    string        `db:"order_id"`
 	UserID     string        `db:"user_id"`
-	Bonus      int           `db:"bonus"`
+	Bonus      float64       `db:"bonus"`
 }
 
-func (d *DB) GetOrders(ctx context.Context) ([]orderEntity, error) {
+func (d *DB) GetUserOrders(ctx context.Context) ([]orderEntity, error) {
 	const stmt = `SELECT * FROM orders WHERE user_id = $1`
 	var oList []orderEntity
 
@@ -202,7 +225,7 @@ func (d *DB) BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) e
 	const (
 		selectStmt = `SELECT current FROM balance WHERE user_id = $1`
 		updateStmt = `UPDATE balance 
-					  SET current = current - @sum, withdrawn = withdrawn + @sum
+					  SET current = current - @sum, withdrawn = withdrawn + @sum, updated_at = NOW()
 					  WHERE user_id = @userID`
 		insertWithdrawalsStmt = `INSERT INTO withdrawals (user_id, order_id, amount) VALUES (@userID, @orderID, @sum)`
 	)
@@ -221,7 +244,7 @@ func (d *DB) BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) e
 
 	defer func() {
 		if err = tx.Rollback(ctx); err != nil {
-			d.log.Debug("failed rollback transaction", err)
+			d.log.Warn("failed rollback transaction", "txErr", err)
 		}
 	}()
 
@@ -280,4 +303,55 @@ func (d *DB) GetWithdrawals(ctx context.Context) ([]withdrawalsEntity, error) {
 	}
 
 	return wList, nil
+}
+
+func (d *DB) GetOrdersList(ctx context.Context) ([]string, error) {
+	const stmt = `SELECT order_id FROM orders WHERE status IN ('NEW', 'PROCESSING')`
+	rows, err := d.pool.Query(ctx, stmt)
+	if err != nil {
+		return nil, fmt.Errorf("failed query rows: %w", err)
+	}
+
+	oList := make([]string, 0)
+	for rows.Next() {
+		var row string
+		if err = rows.Scan(&row); err != nil {
+			return nil, fmt.Errorf("failed scan row: %w", err)
+		}
+		oList = append(oList, row)
+	}
+	return oList, nil
+}
+
+// UpdateOrder updates order with new status then updates user balance using transaction.
+func (d *DB) UpdateOrder(ctx context.Context, data *orders.UpdateOrder) error {
+	const (
+		updOrdersStmt  = `UPDATE orders SET status = $1, bonus = $2 WHERE order_id = $3 RETURNING user_id`
+		updBalanceStmt = `UPDATE balance SET current = current + $1 WHERE user_id = $2`
+	)
+
+	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: "read committed"})
+	if err != nil {
+		return fmt.Errorf("failed begin tx: %w", err)
+	}
+	defer func() {
+		if err = tx.Rollback(ctx); err != nil {
+			d.log.Warn("failed rollback transaction", "txError", err)
+		}
+	}()
+
+	var userID string
+	if err = tx.QueryRow(ctx, updOrdersStmt, data.Status, data.Accrual, data.Number).Scan(&userID); err != nil {
+		return fmt.Errorf("failed execute order stmt: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx, updBalanceStmt, data.Accrual, userID); err != nil {
+		return fmt.Errorf("failed execute balance stmt: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed commit tx: %w", err)
+	}
+
+	return nil
 }
