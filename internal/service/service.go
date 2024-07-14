@@ -99,7 +99,7 @@ func (s *Service) LoginUser(ctx context.Context, user *register.Request) (string
 		return "", fmt.Errorf("failed get user from DB: %w", err)
 	}
 
-	if err := decryptAndCompare(s.Config.Secret.SecretKey, fromDB.Password, user.Password); err != nil {
+	if err = decryptAndCompare(s.Config.Secret.SecretKey, fromDB.Password, user.Password); err != nil {
 		return "", errs.ErrIncorrectPassword
 	}
 	authToken, err := s.BuildJWTString(s.Config.Secret.SecretKey, fromDB.ID)

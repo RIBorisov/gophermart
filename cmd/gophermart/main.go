@@ -21,7 +21,7 @@ func main() {
 	log.Initialize("DEBUG")
 
 	ctx := context.Background()
-	cfg, err := config.LoadConfig(log)
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatal("failed load config\n", err)
 	}

@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
-
-	"github.com/RIBorisov/gophermart/internal/logger"
 )
 
 type Service struct {
@@ -27,7 +25,7 @@ type Config struct {
 	Service Service
 }
 
-func LoadConfig(_ *logger.Log) (*Config, error) {
+func LoadConfig() (*Config, error) {
 	cfg := &Config{}
 	if err := env.Parse(cfg); err != nil {
 		return nil, fmt.Errorf("failed parse env: %w", err)
