@@ -3,7 +3,7 @@ BEGIN TRANSACTION;
 CREATE TABLE IF NOT EXISTS withdrawals(
     user_id UUID NOT NULL,
     order_id VARCHAR(200) UNIQUE NOT NULL,
-    amount DECIMAL(10, 1) NOT NULL DEFAULT 0.0,
+    amount DECIMAL(10, 5) NOT NULL DEFAULT 0.0,
     processed_at TIMESTAMP DEFAULT NOW(),
 
     FOREIGN KEY (user_id) REFERENCES users(user_id)
