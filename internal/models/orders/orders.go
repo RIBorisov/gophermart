@@ -15,11 +15,11 @@ type Order struct {
 	Status     Status    `json:"status"`
 	UploadedAt time.Time `json:"uploaded_at"` // 2020-12-09T16:09:53+03:00
 	Number     string    `json:"number"`
-	Accrual    float64   `json:"accrual,omitempty"`
+	Accrual    float32   `json:"accrual,omitempty"`
 }
 
 type UpdateOrder struct {
 	Status  Status
 	Number  string
-	Accrual float64
+	Accrual float32
 }

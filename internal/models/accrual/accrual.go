@@ -17,7 +17,7 @@ const (
 type OrderInfoResponse struct {
 	Order   string  `json:"order"`
 	Status  Status  `json:"status"`
-	Accrual float64 `json:"accrual"`
+	Accrual float32 `json:"accrual"`
 }
 
 // ConvertToOrderStatus converts Accrual order status into order status.

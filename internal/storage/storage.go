@@ -170,7 +170,7 @@ type orderEntity struct {
 	UploadedAt time.Time     `db:"uploaded_at"`
 	OrderID    string        `db:"order_id"`
 	UserID     string        `db:"user_id"`
-	Bonus      float64       `db:"bonus"`
+	Bonus      float32       `db:"bonus"`
 }
 
 func (d *DB) GetUserOrders(ctx context.Context) ([]orderEntity, error) {
@@ -199,8 +199,8 @@ func (d *DB) GetUserOrders(ctx context.Context) ([]orderEntity, error) {
 type BalanceEntity struct {
 	UpdatedAt time.Time `db:"updated_at"`
 	UserID    string    `db:"user_id"`
-	Current   float64   `db:"current"`
-	Withdrawn float64   `db:"withdrawn"`
+	Current   float32   `db:"current"`
+	Withdrawn float32   `db:"withdrawn"`
 }
 
 func (d *DB) GetBalance(ctx context.Context) (*BalanceEntity, error) {
@@ -235,7 +235,7 @@ func (d *DB) BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) e
 		return err
 	}
 
-	var current float64
+	var current float32
 
 	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: "read committed"})
 	if err != nil {
@@ -277,7 +277,7 @@ type withdrawalsEntity struct {
 	ProcessedAt time.Time `db:"processed_at"`
 	UserID      string    `db:"user_id"`
 	OrderID     string    `db:"order_id"`
-	Amount      float64   `db:"amount"`
+	Amount      float32   `db:"amount"`
 }
 
 func (d *DB) GetWithdrawals(ctx context.Context) ([]withdrawalsEntity, error) {
