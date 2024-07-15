@@ -29,5 +29,10 @@ This service provides a RESTful API for managing user accounts, orders and accru
    - Check if the database container is running with `docker-compose ps`.
    - Stop the database container with `docker-compose down`.
 4. Launch the application in one of the following ways:
-   - From the `/cmd/gophermart` directory, run `go run . -d <DATABASE_URI>`, where `DATABASE_URI` is the database connection string, for example, `postgresql://user_name:user_password@localhost:5432/gophermart?sslmode=disable`.
-   - Using your IDE, where you need to set the `DATABASE_URI` environment variable beforehand, for example, `export DATABASE_URI=postgresql://user_name:user_password@localhost:5432/gophermart?sslmode=disable`.
+   - From the `/cmd/gophermart` directory, run `go run . -d <DATABASE_URI>`, where `DATABASE_URI` is the database connection string, for example, `postgresql://odmen:odmenpass@localhost:5432/gophermart?sslmode=disable`.
+   - Using your IDE, where you need to set the `DATABASE_URI` environment variable beforehand, for example, `export DATABASE_URI=postgresql://odmen:odmenpass@localhost:5432/gophermart?sslmode=disable`.
+5. Launch Accrual application from the directory `/cmd/accrual` on your device 
+   - `./accrual_darwin_amd64` - for Intel Macbook OS
+   - `./accrual_darwin_ard64` - for Silicon Macbook (M series chip) OS 
+   - `./accrual_linux_amd64` - for Linux OS
+   - `./accrual_darwin_amd64` - for Windows OS 
