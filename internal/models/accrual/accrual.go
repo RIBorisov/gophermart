@@ -2,6 +2,7 @@ package accrual
 
 import (
 	"errors"
+
 	"github.com/RIBorisov/gophermart/internal/models/orders"
 )
 

@@ -2,9 +2,6 @@ package service
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"sort"
@@ -12,6 +9,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/golang-jwt/jwt/v4"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/RIBorisov/gophermart/internal/config"
 	"github.com/RIBorisov/gophermart/internal/logger"
@@ -22,34 +20,40 @@ import (
 	"github.com/RIBorisov/gophermart/internal/storage"
 )
 
+type Store interface {
+	SaveUser(ctx context.Context, user *register.Request) (string, error)
+	GetUser(ctx context.Context, login string) (*storage.UserRow, error)
+	SaveOrder(ctx context.Context, orderNo string) error
+	GetUserOrders(ctx context.Context) ([]storage.OrderEntity, error)
+	GetBalance(ctx context.Context) (*storage.BalanceEntity, error)
+	BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) error
+	GetWithdrawals(ctx context.Context) ([]storage.WithdrawalsEntity, error)
+	GetOrdersList(ctx context.Context) ([]string, error)
+	UpdateOrder(ctx context.Context, data *orders.UpdateOrder) error
+	ClosePool() error
+}
+
 type Service struct {
 	Log     *logger.Log
 	Storage storage.Store
 	Config  *config.Config
 }
 
-func encrypt(secret, data string) string {
-	h := sha256.New()
-	h.Write([]byte(data + secret))
-	hashedPassword := h.Sum(nil)
-	encodedPassword := base64.StdEncoding.EncodeToString(hashedPassword)
+func hashPassword(secret, data string) (string, error) {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(data+secret), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("failed hash password: %w", err)
+	}
 
-	return encodedPassword
+	return string(hashed), nil
 }
 
-func decryptAndCompare(secret, encodedData, password string) error {
-	decodedBytes, err := base64.StdEncoding.DecodeString(encodedData)
+func comparePasswords(secret, hashedPassword, password string) error {
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password+secret))
 	if err != nil {
-		return fmt.Errorf("failed to decode encoded data: %w", err)
-	}
-
-	h := sha256.New()
-	h.Write([]byte(password + secret))
-	expectedHash := h.Sum(nil)
-
-	if !hmac.Equal(decodedBytes, expectedHash) {
 		return ErrIncorrectPassword
 	}
+
 	return nil
 }
 
@@ -77,7 +81,10 @@ func (s *Service) BuildJWTString(secretKey string, userID string) (string, error
 }
 
 func (s *Service) RegisterUser(ctx context.Context, user *register.Request) (string, error) {
-	encrypted := encrypt(s.Config.Secret.SecretKey, user.Password)
+	encrypted, err := hashPassword(s.Config.Secret.SecretKey, user.Password)
+	if err != nil {
+		return "", fmt.Errorf("failed hashPassword user data: %w", err)
+	}
 	user.Password = encrypted
 
 	userID, err := s.Storage.SaveUser(ctx, user)
@@ -99,7 +106,7 @@ func (s *Service) LoginUser(ctx context.Context, user *register.Request) (string
 		return "", fmt.Errorf("failed get user from DB: %w", err)
 	}
 
-	if err = decryptAndCompare(s.Config.Secret.SecretKey, fromDB.Password, user.Password); err != nil {
+	if err = comparePasswords(s.Config.Secret.SecretKey, fromDB.Password, user.Password); err != nil {
 		return "", ErrIncorrectPassword
 	}
 	authToken, err := s.BuildJWTString(s.Config.Secret.SecretKey, fromDB.ID)
@@ -119,11 +126,12 @@ func (s *Service) CreateOrder(ctx context.Context, orderNo string) error {
 }
 
 func (s *Service) GetUserOrders(ctx context.Context) ([]orders.Order, error) {
-	list := make([]orders.Order, 0)
 	raw, err := s.Storage.GetUserOrders(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed get orders from storage: %w", err)
 	}
+
+	list := make([]orders.Order, 0, len(raw))
 	for _, o := range raw {
 		list = append(list, orders.Order{
 			Number:     o.OrderID,
