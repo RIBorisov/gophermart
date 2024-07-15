@@ -1,7 +1,7 @@
 package accrual
 
 import (
-	"github.com/RIBorisov/gophermart/internal/errs"
+	"errors"
 	"github.com/RIBorisov/gophermart/internal/models/orders"
 )
 
@@ -32,6 +32,8 @@ func (s Status) ConvertToOrderStatus() (orders.Status, error) {
 	case Processed:
 		return orders.Processed, nil
 	default:
-		return "", errs.ErrInvalidAccrualStatus
+		return "", errInvalidAccrualStatus
 	}
 }
+
+var errInvalidAccrualStatus = errors.New("unexpected accrual status")

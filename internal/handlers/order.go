@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/service"
+	"github.com/RIBorisov/gophermart/internal/storage"
 )
 
 func CreateOrder(svc *service.Service) http.HandlerFunc {
@@ -29,11 +29,11 @@ func CreateOrder(svc *service.Service) http.HandlerFunc {
 			return
 		}
 		if err = svc.CreateOrder(ctx, string(orderNo)); err != nil {
-			if errors.Is(err, errs.ErrAnotherUserOrderCreated) {
-				http.Error(w, errs.ErrAnotherUserOrderCreated.Error(), http.StatusConflict)
+			if errors.Is(err, storage.ErrAnotherUserOrderCreated) {
+				http.Error(w, storage.ErrAnotherUserOrderCreated.Error(), http.StatusConflict)
 				return
 			}
-			if errors.Is(err, errs.ErrOrderCreatedAlready) {
+			if errors.Is(err, storage.ErrOrderCreatedAlready) {
 				w.WriteHeader(http.StatusOK)
 				return
 			} else {

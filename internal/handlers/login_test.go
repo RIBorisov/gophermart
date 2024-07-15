@@ -11,9 +11,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/RIBorisov/gophermart/internal/config"
-	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
 	"github.com/RIBorisov/gophermart/internal/service"
+	"github.com/RIBorisov/gophermart/internal/storage"
 	"github.com/RIBorisov/gophermart/internal/storage/mocks"
 )
 
@@ -65,7 +65,7 @@ func TestLoginHandler(t *testing.T) {
 				"password": "111",
 			},
 			wantStatusCode: http.StatusConflict,
-			wantError:      errs.ErrUserExists,
+			wantError:      storage.ErrUserExists,
 		},
 	}
 

@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/RIBorisov/gophermart/internal/config"
-	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
 	accmodels "github.com/RIBorisov/gophermart/internal/models/accrual"
 	"github.com/RIBorisov/gophermart/internal/models/balance"
@@ -48,7 +48,7 @@ func decryptAndCompare(secret, encodedData, password string) error {
 	expectedHash := h.Sum(nil)
 
 	if !hmac.Equal(decodedBytes, expectedHash) {
-		return errs.ErrIncorrectPassword
+		return ErrIncorrectPassword
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func (s *Service) LoginUser(ctx context.Context, user *register.Request) (string
 	}
 
 	if err = decryptAndCompare(s.Config.Secret.SecretKey, fromDB.Password, user.Password); err != nil {
-		return "", errs.ErrIncorrectPassword
+		return "", ErrIncorrectPassword
 	}
 	authToken, err := s.BuildJWTString(s.Config.Secret.SecretKey, fromDB.ID)
 	if err != nil {
@@ -162,7 +162,7 @@ func (s *Service) GetWithdrawals(ctx context.Context) ([]balance.Withdrawal, err
 	}
 
 	if len(raw) == 0 {
-		return nil, errs.ErrNoWithdrawals
+		return nil, ErrNoWithdrawals
 	}
 
 	wList := make([]balance.Withdrawal, 0)
@@ -225,3 +225,8 @@ func (s *Service) UpdateOrder(ctx context.Context, data *accmodels.OrderInfoResp
 
 	return nil
 }
+
+var (
+	ErrNoWithdrawals     = errors.New("user has no withdrawals yet")
+	ErrIncorrectPassword = errors.New("invalid password")
+)

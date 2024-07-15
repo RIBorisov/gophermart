@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/service"
 )
 
@@ -13,7 +12,7 @@ func Withdrawals(svc *service.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wList, err := svc.GetWithdrawals(r.Context())
 		if err != nil {
-			if errors.Is(err, errs.ErrNoWithdrawals) {
+			if errors.Is(err, service.ErrNoWithdrawals) {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}

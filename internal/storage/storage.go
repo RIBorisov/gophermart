@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/RIBorisov/gophermart/internal/config"
-	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/logger"
 	"github.com/RIBorisov/gophermart/internal/models"
 	"github.com/RIBorisov/gophermart/internal/models/balance"
@@ -46,10 +45,12 @@ func LoadStorage(ctx context.Context, cfg *config.Config, log *logger.Log) (Stor
 	return &DB{pool, cfg, log}, nil
 }
 
+var errGetUserFromContext = errors.New("failed get userID from context")
+
 func getCtxUserID(ctx context.Context) (string, error) {
 	ctxUserID, ok := ctx.Value(models.CtxUserIDKey).(string)
 	if !ok {
-		return "", errs.ErrGetUserFromContext
+		return "", errGetUserFromContext
 	}
 	return ctxUserID, nil
 }
@@ -84,7 +85,7 @@ func (d *DB) SaveUser(ctx context.Context, user *register.Request) (string, erro
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			if pgErr.ConstraintName == loginShouldBeUniq {
-				return "", errs.ErrUserExists
+				return "", ErrUserExists
 			}
 		}
 		return "", fmt.Errorf("failed query row request: %w", err)
@@ -116,7 +117,7 @@ func (d *DB) GetUser(ctx context.Context, login string) (*UserRow, error) {
 	)
 	if err := row.Scan(&uRow.ID, &uRow.Login, &pass); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errs.ErrUserNotExists
+			return nil, ErrUserNotExists
 		}
 		return nil, fmt.Errorf("failed scan row: %w", err)
 	}
@@ -151,10 +152,10 @@ func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
 	// one of these errors: ErrOrderCreatedAlready, ErrAnotherUserOrderCreated
 	if existedOrderNo != "" {
 		if userID == existedUserID {
-			return errs.ErrOrderCreatedAlready
+			return ErrOrderCreatedAlready
 		}
 
-		return errs.ErrAnotherUserOrderCreated
+		return ErrAnotherUserOrderCreated
 	}
 
 	_, err = d.pool.Exec(ctx, insertStmt, orderNo, userID)
@@ -214,7 +215,7 @@ func (d *DB) GetBalance(ctx context.Context) (*BalanceEntity, error) {
 	err = d.pool.QueryRow(ctx, stmt, userID).Scan(&b.Current, &b.Withdrawn)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errs.ErrUserNotExists
+			return nil, ErrUserNotExists
 		}
 		return nil, fmt.Errorf("failed query row: %w", err)
 	}
@@ -253,7 +254,7 @@ func (d *DB) BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) e
 	}
 
 	if current < req.Sum {
-		return errs.ErrInsufficientFunds
+		return ErrInsufficientFunds
 	}
 
 	_, err = tx.Exec(ctx, updateStmt, pgx.NamedArgs{"sum": req.Sum, "userID": userID})
@@ -355,3 +356,11 @@ func (d *DB) UpdateOrder(ctx context.Context, data *orders.UpdateOrder) error {
 
 	return nil
 }
+
+var (
+	ErrInsufficientFunds       = errors.New("insufficient funds")
+	ErrOrderCreatedAlready     = errors.New("order number already created by this user")
+	ErrUserExists              = errors.New("user already exists")
+	ErrUserNotExists           = errors.New("user not exists")
+	ErrAnotherUserOrderCreated = errors.New("order number already created by another user")
+)

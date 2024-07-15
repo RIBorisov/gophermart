@@ -5,9 +5,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/RIBorisov/gophermart/internal/errs"
 	"github.com/RIBorisov/gophermart/internal/models/balance"
 	"github.com/RIBorisov/gophermart/internal/service"
+	"github.com/RIBorisov/gophermart/internal/storage"
 )
 
 func CurrentBalance(svc *service.Service) http.HandlerFunc {
@@ -15,7 +15,7 @@ func CurrentBalance(svc *service.Service) http.HandlerFunc {
 		ctx := r.Context()
 		current, err := svc.GetBalance(ctx)
 		if err != nil {
-			if errors.Is(err, errs.ErrUserNotExists) {
+			if errors.Is(err, storage.ErrUserNotExists) {
 				http.Error(w, "Balance info not found", http.StatusNotFound)
 				return
 			}
@@ -59,7 +59,7 @@ func BalanceWithdraw(svc *service.Service) http.HandlerFunc {
 
 		err = svc.BalanceWithdraw(ctx, req)
 		if err != nil {
-			if errors.Is(err, errs.ErrInsufficientFunds) {
+			if errors.Is(err, storage.ErrInsufficientFunds) {
 				http.Error(w, "You have insufficient funds", http.StatusPaymentRequired)
 				return
 			}
