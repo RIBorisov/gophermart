@@ -10,8 +10,8 @@ import (
 )
 
 // RunPoller opens chan, starts ticker for the interval and every tick realizes next logic:
-// 1. get orders from database that should be processed
-// 2. pushes it to the chan
+// 1. Get orders from database that should be processed
+// 2. Pushes it to the chan
 // If the chan is not empty, gets new order info from accrual service by the order_id from chan
 // and updates order info in database.
 func RunPoller(ctx context.Context, svc *service.Service) (chan string, error) {

@@ -18,6 +18,7 @@ import (
 )
 
 func TestRegisterHandler(t *testing.T) {
+	const route = "/api/user/register"
 	log := &logger.Log{}
 	log.Initialize("DEBUG")
 	cfg, err := config.LoadConfig()
@@ -79,13 +80,13 @@ func TestRegisterHandler(t *testing.T) {
 			mockStore.EXPECT().
 				SaveUser(gomock.Any(), gomock.Any()).
 				Times(tt.callTimes).
-				Return("token123", tt.wantError)
+				Return("", tt.wantError)
 
 			handler := Register(svc)
 			reqBody, err := json.Marshal(tt.body)
 			assert.NoError(t, err)
 
-			req, err := http.NewRequest("POST", "/api/user/register", bytes.NewBuffer(reqBody))
+			req, err := http.NewRequest(tt.method, route, bytes.NewBuffer(reqBody))
 			assert.NoError(t, err)
 
 			req.Header.Set("Content-Type", "application/json")
@@ -93,7 +94,7 @@ func TestRegisterHandler(t *testing.T) {
 
 			handler(w, req)
 			resp := w.Result()
-
+			assert.NoError(t, resp.Body.Close())
 			assert.Equal(t, tt.wantStatusCode, resp.StatusCode)
 		})
 	}
