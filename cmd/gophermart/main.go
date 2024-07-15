@@ -54,8 +54,11 @@ func runApp(ctx context.Context, cfg *config.Config, log *logger.Log) error {
 	r := handlers.NewRouter(svc)
 
 	srv := &http.Server{
-		Addr:    cfg.Service.RunAddress,
-		Handler: r,
+		Addr:         cfg.Service.RunAddress,
+		Handler:      r,
+		ReadTimeout:  cfg.Service.Timeout,
+		WriteTimeout: cfg.Service.Timeout,
+		IdleTimeout:  cfg.Service.IdleTimeout,
 	}
 
 	svc.Log.Info(
