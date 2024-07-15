@@ -132,7 +132,7 @@ func (s *Service) GetUserOrders(ctx context.Context) ([]orders.Order, error) {
 			UploadedAt: o.UploadedAt,
 		})
 	}
-	sort.SliceStable(list, func(i, j int) bool {
+	sort.Slice(list, func(i, j int) bool {
 		return list[i].UploadedAt.After(list[j].UploadedAt)
 	})
 
@@ -173,7 +173,7 @@ func (s *Service) GetWithdrawals(ctx context.Context) ([]balance.Withdrawal, err
 		}
 		wList = append(wList, balance.Withdrawal{Order: row.OrderID, Sum: row.Amount, ProcessedAt: fTime})
 	}
-	sort.SliceStable(wList, func(i, j int) bool {
+	sort.Slice(wList, func(i, j int) bool {
 		return wList[i].ProcessedAt.After(wList[j].ProcessedAt)
 	})
 
