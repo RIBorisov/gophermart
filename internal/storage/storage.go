@@ -23,10 +23,10 @@ type Store interface {
 	SaveUser(ctx context.Context, user *register.Request) (string, error)
 	GetUser(ctx context.Context, login string) (*UserRow, error)
 	SaveOrder(ctx context.Context, orderNo string) error
-	GetUserOrders(ctx context.Context) ([]orderEntity, error)
+	GetUserOrders(ctx context.Context) ([]OrderEntity, error)
 	GetBalance(ctx context.Context) (*BalanceEntity, error)
 	BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) error
-	GetWithdrawals(ctx context.Context) ([]withdrawalsEntity, error)
+	GetWithdrawals(ctx context.Context) ([]WithdrawalsEntity, error)
 	GetOrdersList(ctx context.Context) ([]string, error)
 	UpdateOrder(ctx context.Context, data *orders.UpdateOrder) error
 	ClosePool() error
@@ -165,7 +165,7 @@ func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
 	return nil
 }
 
-type orderEntity struct {
+type OrderEntity struct {
 	Status     orders.Status `db:"status"`
 	UploadedAt time.Time     `db:"uploaded_at"`
 	OrderID    string        `db:"order_id"`
@@ -173,9 +173,9 @@ type orderEntity struct {
 	Bonus      float32       `db:"bonus"`
 }
 
-func (d *DB) GetUserOrders(ctx context.Context) ([]orderEntity, error) {
+func (d *DB) GetUserOrders(ctx context.Context) ([]OrderEntity, error) {
 	const stmt = `SELECT * FROM orders WHERE user_id = $1`
-	var oList []orderEntity
+	var oList []OrderEntity
 
 	userID, err := getCtxUserID(ctx)
 	if err != nil {
@@ -186,7 +186,7 @@ func (d *DB) GetUserOrders(ctx context.Context) ([]orderEntity, error) {
 		return nil, fmt.Errorf("failed query: %w", err)
 	}
 	for rows.Next() {
-		var o orderEntity
+		var o OrderEntity
 		if err = rows.Scan(&o.OrderID, &o.UserID, &o.Status, &o.Bonus, &o.UploadedAt); err != nil {
 			return nil, fmt.Errorf("failed scan into order entity: %w", err)
 		}
@@ -273,14 +273,14 @@ func (d *DB) BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) e
 	return nil
 }
 
-type withdrawalsEntity struct {
+type WithdrawalsEntity struct {
 	ProcessedAt time.Time `db:"processed_at"`
 	UserID      string    `db:"user_id"`
 	OrderID     string    `db:"order_id"`
 	Amount      float32   `db:"amount"`
 }
 
-func (d *DB) GetWithdrawals(ctx context.Context) ([]withdrawalsEntity, error) {
+func (d *DB) GetWithdrawals(ctx context.Context) ([]WithdrawalsEntity, error) {
 	const stmt = `SELECT order_id, amount, processed_at::timestamptz FROM withdrawals WHERE user_id = $1`
 
 	userID, err := getCtxUserID(ctx)
@@ -291,9 +291,9 @@ func (d *DB) GetWithdrawals(ctx context.Context) ([]withdrawalsEntity, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed query withdrawals: %w", err)
 	}
-	var wList []withdrawalsEntity
+	var wList []WithdrawalsEntity
 	for rows.Next() {
-		var row withdrawalsEntity
+		var row WithdrawalsEntity
 
 		if err = rows.Scan(&row.OrderID, &row.Amount, &row.ProcessedAt); err != nil {
 			return nil, fmt.Errorf("failed scan withdrawals row: %w", err)

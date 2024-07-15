@@ -31,3 +31,8 @@ _golangci-lint-rm-unformatted-report: _golangci-lint-format-report
 .PHONY: golangci-lint-clean
 golangci-lint-clean:
 	sudo rm -rf ./golangci-lint
+
+
+.PHONY: mocks
+mocks:
+	mockgen -source=internal/storage/storage.go -destination=internal/storage/mocks/storage_mock.gen.go -package=mocks

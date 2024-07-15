@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -40,8 +39,6 @@ func LoadConfig() (*Config, error) {
 	}
 	if flags.DatabaseDSN != "" {
 		cfg.Service.DatabaseDSN = flags.DatabaseDSN
-	} else if cfg.Service.DatabaseDSN == "" {
-		return nil, errors.New("failed read DATABASE_URI value")
 	}
 
 	return cfg, nil
