@@ -131,26 +131,41 @@ func (d *DB) GetUser(ctx context.Context, login string) (*UserRow, error) {
 func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
 	const (
 		insertStmt = `INSERT INTO orders (order_id, user_id) VALUES ($1, $2)`
-		selectStmt = `SELECT order_id, user_id FROM orders WHERE order_id = $1`
+		selectStmt = `SELECT user_id FROM orders WHERE order_id = $1 FOR UPDATE`
 	)
-	var existedOrderNo, existedUserID string
-	err := d.pool.QueryRow(ctx, selectStmt, orderNo).Scan(&existedOrderNo, &existedUserID)
+
+	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: "read committed"})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			d.log.Debug("order number not found in db and can be stored", "orderNo", orderNo)
-		} else {
-			return fmt.Errorf("failed scan order from db: %w", err)
-		}
+		return fmt.Errorf("failed to begin tx: %w", err)
 	}
+
+	defer func() {
+		if err = tx.Rollback(ctx); err != nil {
+			d.log.Warn("failed rollback transaction", "txErr", err)
+		}
+	}()
 
 	userID, err := getCtxUserID(ctx)
 	if err != nil {
 		return err
 	}
 
-	// orderNo already in db, therefore we should return
-	// one of these errors: ErrOrderCreatedAlready, ErrAnotherUserOrderCreated
-	if existedOrderNo != "" {
+	var existedUserID string
+
+	// Проверяем есть ли такой заказ. Если он есть:
+	// 1 - достаем пользователя у этого заказа
+	// 2 - возвращаем ErrOrderCreatedAlready или ErrAnotherUserOrderCreated
+	// если заказа нет - сохраняем в бд заказ
+	err = tx.QueryRow(ctx, selectStmt, orderNo).Scan(&existedUserID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			if _, err = tx.Exec(ctx, insertStmt, orderNo, userID); err != nil {
+				return fmt.Errorf("failed execute insert order stmt: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed execute select stmt: %w", err)
+		}
+	} else {
 		if userID == existedUserID {
 			return ErrOrderCreatedAlready
 		}
@@ -158,9 +173,8 @@ func (d *DB) SaveOrder(ctx context.Context, orderNo string) error {
 		return ErrAnotherUserOrderCreated
 	}
 
-	_, err = d.pool.Exec(ctx, insertStmt, orderNo, userID)
-	if err != nil {
-		return fmt.Errorf("failed execute statement: %w", err)
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed commit tx: %w", err)
 	}
 
 	return nil
