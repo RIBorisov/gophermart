@@ -25,6 +25,7 @@ func RunPoller(ctx context.Context, svc *service.Service) (chan string, error) {
 			oList, err := svc.GetOrdersForProcessing(ctx)
 			if err != nil {
 				svc.Log.Err("failed get unprocessed orders", err)
+				continue
 			}
 			if len(oList) > 0 {
 				svc.Log.Info("got order ids for processing", "count", len(oList))
@@ -50,6 +51,7 @@ func RunPoller(ctx context.Context, svc *service.Service) (chan string, error) {
 				data, err := svc.FetchOrderInfo(ctx, aClient, orderNo)
 				if err != nil {
 					svc.Log.Err("failed fetch order info", err)
+					continue
 				}
 
 				svc.Log.Debug("updating info about order", "order_id", orderNo)

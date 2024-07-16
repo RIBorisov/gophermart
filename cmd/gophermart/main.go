@@ -71,14 +71,23 @@ func runApp(ctx context.Context, cfg *config.Config, log *logger.Log) error {
 	return srv.ListenAndServe()
 }
 
-func enableGracefulShutdown(ctx context.Context, svc *service.Service, srv *http.Server, ch chan string) {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
-	svc.Log.Warn("received signal, shutting down...")
-	close(ch)
+var neverReady = make(chan struct{}) // never closed
 
-	if err := srv.Shutdown(ctx); err != nil {
-		svc.Log.Fatal("failed make graceful shutdown")
+func enableGracefulShutdown(ctx context.Context, svc *service.Service, srv *http.Server, ch chan string) {
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case <-neverReady:
+		svc.Log.Info("Ready")
+	case <-ctx.Done():
+		svc.Log.Warn("received signal to stop application")
+		close(ch)
+		close(neverReady)
+		stop()
+
+		if err := srv.Shutdown(ctx); err != nil {
+			svc.Log.Fatal("failed make graceful shutdown")
+		}
 	}
 }
