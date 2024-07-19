@@ -14,7 +14,7 @@ type Service struct {
 	DatabaseDSN           string        `env:"DATABASE_URI" envDefault:""`
 	AccrualPollInterval   time.Duration `env:"ACCRUAL_POLL_INTERVAL" envDefault:"10s"`
 	Timeout               time.Duration `env:"READ_TIMEOUT" envDefault:"5s"`
-	IdleTimeout           time.Duration `env:"IDLE_TIMEOUT" envDefault:"60s"`
+	IdleTimeout           time.Duration `env:"IDLE_TIMEOUT" envDefault:"120s"`
 }
 
 type Secret struct {

@@ -13,7 +13,7 @@ func RunPoller(ctx context.Context, svc *service.Service) (chan string, error) {
 	client := resty.New().SetBaseURL(svc.Config.Service.AccrualSystemAddress)
 	const numWorkers = 5
 
-	interval := svc.Config.Service.AccrualPollInterval + 60*time.Second
+	interval := svc.Config.Service.AccrualPollInterval
 
 	ordersCh := make(chan string)
 	resultCh := make(chan string)
