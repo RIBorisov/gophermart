@@ -205,6 +205,8 @@ func (s *Service) FetchOrderInfo(
 	var updatedInfo accmodels.OrderInfoResponse
 
 	url := s.Config.Service.AccrualSystemAddress + s.Config.Service.AccrualOrderInfoRoute
+
+	s.Log.Debug("fetching order info", "order_id", orderNo)
 	resp, err := client.R().
 		SetContext(ctx).
 		SetPathParam("orderID", orderNo).
@@ -220,6 +222,8 @@ func (s *Service) FetchOrderInfo(
 }
 
 func (s *Service) UpdateOrder(ctx context.Context, data *accmodels.OrderInfoResponse) error {
+	s.Log.Debug("updating order", "order_id", data.Order)
+
 	status, err := data.Status.ConvertToOrderStatus()
 	if err != nil {
 		return fmt.Errorf("failed convert to order status: %w", err)
