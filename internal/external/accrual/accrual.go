@@ -2,6 +2,8 @@ package accrual
 
 import (
 	"context"
+	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -11,13 +13,28 @@ import (
 
 func RunPoller(ctx context.Context, svc *service.Service) (chan string, error) {
 	client := resty.New().SetBaseURL(svc.Config.Service.AccrualSystemAddress)
+	client.AddRetryCondition(func(r *resty.Response, err error) bool {
+		if r.StatusCode() == http.StatusTooManyRequests {
+			retryAfter, err := strconv.Atoi(r.Header().Get("Retry-After"))
+			if err != nil {
+				svc.Log.Err("failed convert string to integer Retry-After header value: %w", err)
+				return true
+			}
+			time.Sleep(time.Duration(retryAfter) * time.Second)
+			return true
+		}
+
+		return false
+	})
+
 	const numWorkers = 5
 
 	interval := svc.Config.Service.AccrualPollInterval
 
 	ordersCh := make(chan string)
 	resultCh := make(chan string)
-	for i := 0; i < numWorkers; i++ {
+
+	for range numWorkers {
 		go func() {
 			for o := range ordersCh {
 				select {
