@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/RIBorisov/gophermart/internal/config"
 	"github.com/RIBorisov/gophermart/internal/external/accrual"
@@ -24,18 +26,22 @@ func main() {
 	log := &logger.Log{}
 	log.Initialize("DEBUG")
 
-	ctx := context.Background()
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatal("failed load config", err)
 	}
 
-	if err = runApp(ctx, cfg, log); err != nil {
+	if err = runApp(cfg, log); err != nil {
 		log.Fatal("failed run application\n", err)
 	}
 }
 
-func runApp(ctx context.Context, cfg *config.Config, log *logger.Log) error {
+func runApp(cfg *config.Config, log *logger.Log) error {
+	rootCtx, cancelCtx := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancelCtx()
+
+	g, ctx := errgroup.WithContext(rootCtx)
+
 	store, err := storage.LoadStorage(ctx, cfg, log)
 	if err != nil {
 		log.Fatal("failed load storage", err)
@@ -52,20 +58,36 @@ func runApp(ctx context.Context, cfg *config.Config, log *logger.Log) error {
 	ordersCh := make(chan string)
 	resultCh := make(chan string)
 	client := initClient(svc)
+	const (
+		workerNum       = 3
+		timeoutShutdown = time.Second * 5
+	)
 
-	go func() {
-		for o := range ordersCh {
-			select {
-			case <-ctx.Done():
-				svc.Log.Info("Done reading from channel")
-				return
-			default:
-				accrual.ProcessOrder(ctx, svc, o, client, resultCh)
+	// обрабатываем заказ если ctx активен, записываем в resultCh номер заказа
+	for range workerNum {
+		g.Go(func() error {
+			for o := range ordersCh {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+					if err = accrual.ProcessOrder(ctx, svc, o, client); err != nil {
+						return err
+					}
+					resultCh <- o
+				}
 			}
-		}
-	}()
+			return nil
+		})
+	}
 
-	go accrual.GetOrders(ctx, svc, ordersCh)
+	// получаем заказы из БД и пишем в ordersCh, если контекст отменен - закрываем ordersCh
+	g.Go(func() error {
+		accrual.GetOrders(ctx, svc, ordersCh)
+		<-ctx.Done()
+		svc.Log.Debug("closing GetOrders goroutine")
+		return nil
+	})
 
 	r := handlers.NewRouter(svc)
 
@@ -83,26 +105,49 @@ func runApp(ctx context.Context, cfg *config.Config, log *logger.Log) error {
 		"ACCRUAL_SYSTEM_ADDRESS", cfg.Service.AccrualSystemAddress,
 	)
 
-	go enableGracefulShutdown(ctx, svc, srv, ordersCh)
+	g.Go(func() error {
+		enableGracefulShutdown(ctx, svc, srv)
+		<-ctx.Done()
+		close(resultCh)
+		svc.Log.Debug("closing GracefulShutdown goroutine")
+		return nil
+	})
 
-	if err = srv.ListenAndServe(); err != nil {
-		if errors.Is(err, http.ErrServerClosed) {
-			svc.Log.Info("server closed")
-			return nil
+	context.AfterFunc(ctx, func() {
+		ctx, cancelCtx := context.WithTimeout(context.Background(), timeoutShutdown)
+		defer cancelCtx()
+
+		<-ctx.Done()
+		log.Fatal("failed do graceful shutdown")
+	})
+
+	g.Go(func() error {
+		if err = srv.ListenAndServe(); err != nil {
+			if errors.Is(err, http.ErrServerClosed) {
+				svc.Log.Info("server closed")
+			} else {
+				return fmt.Errorf("failed listen and serve: %w", err)
+			}
 		}
-		return fmt.Errorf("failed listen and serve: %w", err)
+		<-ctx.Done()
+		svc.Log.Debug("closing ListenAndServe goroutine")
+
+		return nil
+	})
+
+	if err = g.Wait(); err != nil {
+		svc.Log.Err("failed wait for goroutines finished", err)
 	}
 
 	return nil
 }
 
-func enableGracefulShutdown(ctx context.Context, svc *service.Service, srv *http.Server, ch chan string) {
+func enableGracefulShutdown(ctx context.Context, svc *service.Service, srv *http.Server) {
 	ctx, cancelCtx := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer cancelCtx()
 
 	<-ctx.Done()
 	svc.Log.Warn("received signal to stop application")
-	close(ch)
 	cancelCtx()
 
 	if err := srv.Shutdown(ctx); err != nil {

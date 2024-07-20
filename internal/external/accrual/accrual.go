@@ -2,6 +2,7 @@ package accrual
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -11,38 +12,41 @@ import (
 
 func GetOrders(ctx context.Context, svc *service.Service, ordersCh chan<- string) {
 	ticker := time.NewTicker(svc.Config.Service.AccrualPollInterval)
-	for range ticker.C {
-		oList, err := svc.GetOrdersForProcessing(ctx)
-		if err != nil {
-			svc.Log.Err("failed get unprocessed orders", err)
-			continue
-		}
-		if len(oList) > 0 {
-			svc.Log.Info("got order ids for processing", "count", len(oList))
-			for _, o := range oList {
-				ordersCh <- o
+	for {
+		select {
+		case <-ctx.Done():
+			close(ordersCh)
+			return
+		case <-ticker.C:
+			oList, err := svc.GetOrdersForProcessing(ctx)
+			if err != nil {
+				svc.Log.Err("failed get unprocessed orders", err)
+				continue
 			}
-		} else {
-			svc.Log.Info("not found orders for processing")
+			if len(oList) > 0 {
+				svc.Log.Info("got order ids for processing", "count", len(oList))
+				for _, o := range oList {
+					ordersCh <- o
+				}
+			} else {
+				svc.Log.Info("not found orders for processing")
+			}
 		}
 	}
-	close(ordersCh)
 }
 
-func ProcessOrder(
-	ctx context.Context, svc *service.Service, orderNo string, client *resty.Client, resultCh chan<- string,
-) {
+func ProcessOrder(ctx context.Context, svc *service.Service, orderNo string, client *resty.Client) error {
 	svc.Log.Info("starting process order", "order_id", orderNo)
 	data, err := svc.FetchOrderInfo(ctx, client, orderNo)
 	if err != nil {
-		svc.Log.Err("failed fetch order info", err)
-		return
+		return fmt.Errorf("failed fetch order info: %w", err)
 	}
 
 	err = svc.UpdateOrder(ctx, data)
 	if err != nil {
-		svc.Log.Err("failed update order", err)
-		return
+		return fmt.Errorf("failed update order: %w", err)
+
 	}
-	resultCh <- orderNo
+
+	return nil
 }
