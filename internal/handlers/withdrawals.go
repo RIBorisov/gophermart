@@ -22,11 +22,12 @@ func Withdrawals(svc *service.Service) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
 		if err = json.NewEncoder(w).Encode(wList); err != nil {
 			svc.Log.Err("failed encode withdrawals response", err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
 	}
 }
