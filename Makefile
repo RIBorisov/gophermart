@@ -36,3 +36,7 @@ golangci-lint-clean:
 .PHONY: mocks
 mocks:
 	mockgen -source=internal/storage/storage.go -destination=internal/storage/mocks/storage_mock.gen.go -package=mocks
+
+.PHONY: coverage
+coverage:
+	cd internal/handlers && go test -coverprofile=coverage.out

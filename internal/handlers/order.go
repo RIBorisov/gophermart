@@ -42,7 +42,7 @@ func CreateOrder(svc *service.Service) http.HandlerFunc {
 				return
 			}
 		}
-		svc.Log.Info("Successfully loaded order", "order_id", string(orderNo))
+		svc.Log.Info("successfully loaded order", "order_id", string(orderNo))
 		w.WriteHeader(http.StatusAccepted)
 	}
 }

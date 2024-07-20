@@ -45,12 +45,12 @@ func LoadStorage(ctx context.Context, cfg *config.Config, log *logger.Log) (Stor
 	return &DB{pool, cfg, log}, nil
 }
 
-var errGetUserFromContext = errors.New("failed get userID from context")
+var ErrGetUserFromContext = errors.New("failed get userID from context")
 
 func getCtxUserID(ctx context.Context) (string, error) {
 	ctxUserID, ok := ctx.Value(models.CtxUserIDKey).(string)
 	if !ok {
-		return "", errGetUserFromContext
+		return "", ErrGetUserFromContext
 	}
 	return ctxUserID, nil
 }
