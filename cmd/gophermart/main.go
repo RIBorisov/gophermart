@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
+	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	"github.com/RIBorisov/gophermart/internal/config"
 	"github.com/RIBorisov/gophermart/internal/external/accrual"
@@ -23,11 +27,10 @@ func main() {
 	ctx := context.Background()
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatal("failed load config\n", err)
+		log.Fatal("failed load config", err)
 	}
 
-	err = runApp(ctx, cfg, log)
-	if err != nil {
+	if err = runApp(ctx, cfg, log); err != nil {
 		log.Fatal("failed run application\n", err)
 	}
 }
@@ -35,7 +38,7 @@ func main() {
 func runApp(ctx context.Context, cfg *config.Config, log *logger.Log) error {
 	store, err := storage.LoadStorage(ctx, cfg, log)
 	if err != nil {
-		log.Fatal("failed load storage\n", err)
+		log.Fatal("failed load storage", err)
 	}
 
 	defer func() {
@@ -46,10 +49,23 @@ func runApp(ctx context.Context, cfg *config.Config, log *logger.Log) error {
 
 	svc := &service.Service{Log: log, Storage: store, Config: cfg}
 
-	ordersCh, err := accrual.RunPoller(ctx, svc)
-	if err != nil {
-		return fmt.Errorf("failed run accrual poller: %w", err)
-	}
+	ordersCh := make(chan string)
+	resultCh := make(chan string)
+	client := initClient(svc)
+
+	go func() {
+		for o := range ordersCh {
+			select {
+			case <-ctx.Done():
+				svc.Log.Info("Done reading from channel")
+				return
+			default:
+				accrual.ProcessOrder(ctx, svc, o, client, resultCh)
+			}
+		}
+	}()
+
+	go accrual.GetOrders(ctx, svc, ordersCh)
 
 	r := handlers.NewRouter(svc)
 
@@ -66,28 +82,50 @@ func runApp(ctx context.Context, cfg *config.Config, log *logger.Log) error {
 		"RUN_ADDRESS", srv.Addr,
 		"ACCRUAL_SYSTEM_ADDRESS", cfg.Service.AccrualSystemAddress,
 	)
+
 	go enableGracefulShutdown(ctx, svc, srv, ordersCh)
 
-	return srv.ListenAndServe()
+	if err = srv.ListenAndServe(); err != nil {
+		if errors.Is(err, http.ErrServerClosed) {
+			svc.Log.Info("server closed")
+			return nil
+		}
+		return fmt.Errorf("failed listen and serve: %w", err)
+	}
+
+	return nil
 }
 
-var neverReady = make(chan struct{}) // never closed
-
 func enableGracefulShutdown(ctx context.Context, svc *service.Service, srv *http.Server, ch chan string) {
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	ctx, cancelCtx := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer cancelCtx()
 
 	select {
-	case <-neverReady:
-		svc.Log.Info("Ready")
 	case <-ctx.Done():
 		svc.Log.Warn("received signal to stop application")
 		close(ch)
-		close(neverReady)
-		stop()
+		cancelCtx()
 
 		if err := srv.Shutdown(ctx); err != nil {
 			svc.Log.Fatal("failed make graceful shutdown")
 		}
 	}
+}
+
+func initClient(svc *service.Service) *resty.Client {
+	client := resty.New().SetBaseURL(svc.Config.Service.AccrualSystemAddress)
+	client.AddRetryCondition(func(r *resty.Response, err error) bool {
+		if r.StatusCode() == http.StatusTooManyRequests {
+			retryAfter, err := strconv.Atoi(r.Header().Get("Retry-After"))
+			if err != nil {
+				svc.Log.Err("failed convert string to integer Retry-After header value: %w", err)
+				return true
+			}
+			time.Sleep(time.Duration(retryAfter) * time.Second)
+			return true
+		}
+
+		return false
+	})
+	return client
 }
