@@ -45,7 +45,6 @@ func ProcessOrder(ctx context.Context, svc *service.Service, orderNo string, cli
 	err = svc.UpdateOrder(ctx, data)
 	if err != nil {
 		return fmt.Errorf("failed update order: %w", err)
-
 	}
 
 	return nil

@@ -32,7 +32,7 @@ func main() {
 	}
 
 	if err = runApp(cfg, log); err != nil {
-		log.Fatal("failed run application\n", err)
+		log.Fatal("failed run application", err)
 	}
 }
 
@@ -44,7 +44,7 @@ func runApp(cfg *config.Config, log *logger.Log) error {
 
 	store, err := storage.LoadStorage(ctx, cfg, log)
 	if err != nil {
-		log.Fatal("failed load storage", err)
+		return fmt.Errorf("failed load storage: %w", err)
 	}
 
 	defer func() {
@@ -71,7 +71,7 @@ func runApp(cfg *config.Config, log *logger.Log) error {
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
-					if err = accrual.ProcessOrder(ctx, svc, o, client); err != nil {
+					if err := accrual.ProcessOrder(ctx, svc, o, client); err != nil {
 						return err
 					}
 					resultCh <- o

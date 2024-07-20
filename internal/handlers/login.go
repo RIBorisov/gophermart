@@ -42,8 +42,8 @@ func Login(svc *service.Service) http.HandlerFunc {
 		authToken, err := svc.LoginUser(ctx, user)
 		if err != nil {
 			if errors.Is(err, storage.ErrUserNotExists) || errors.Is(err, service.ErrIncorrectPassword) {
-				response.Success = false
-				response.Details = "Invalid login and (or) password"
+				http.Error(w, "Invalid login and (or) password", http.StatusUnauthorized)
+				return
 			} else {
 				svc.Log.Err("failed login user", err)
 				http.Error(w, "", http.StatusInternalServerError)
