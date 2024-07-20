@@ -100,15 +100,13 @@ func enableGracefulShutdown(ctx context.Context, svc *service.Service, srv *http
 	ctx, cancelCtx := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer cancelCtx()
 
-	select {
-	case <-ctx.Done():
-		svc.Log.Warn("received signal to stop application")
-		close(ch)
-		cancelCtx()
+	<-ctx.Done()
+	svc.Log.Warn("received signal to stop application")
+	close(ch)
+	cancelCtx()
 
-		if err := srv.Shutdown(ctx); err != nil {
-			svc.Log.Fatal("failed make graceful shutdown")
-		}
+	if err := srv.Shutdown(ctx); err != nil {
+		svc.Log.Fatal("failed make graceful shutdown")
 	}
 }
 

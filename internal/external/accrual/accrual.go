@@ -29,7 +29,9 @@ func GetOrders(ctx context.Context, svc *service.Service, ordersCh chan<- string
 	close(ordersCh)
 }
 
-func ProcessOrder(ctx context.Context, svc *service.Service, orderNo string, client *resty.Client, resultCh chan<- string) {
+func ProcessOrder(
+	ctx context.Context, svc *service.Service, orderNo string, client *resty.Client, resultCh chan<- string,
+) {
 	svc.Log.Info("starting process order", "order_id", orderNo)
 	data, err := svc.FetchOrderInfo(ctx, client, orderNo)
 	if err != nil {
