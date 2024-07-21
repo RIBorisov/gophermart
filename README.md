@@ -20,6 +20,7 @@ This service provides a RESTful API for managing user accounts, orders and accru
    - Logger: Logs requests and responses.
    - Recoverer: Recovers from panics and returns a 500 error.
    - CheckAuth: Checks if the user is authenticated before allowing access to protected endpoints.
+   - Gzip: Compress response
 
 # Local launch
 
