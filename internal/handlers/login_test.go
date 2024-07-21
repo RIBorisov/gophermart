@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -69,6 +70,15 @@ func TestLoginHandler(t *testing.T) {
 			body:           &register.Request{Login: "UserNotRegistered", Password: "some-password1234"},
 			wantStatusCode: http.StatusUnauthorized,
 			wantError:      storage.ErrUserNotExists,
+		},
+		{
+			name:           "Negative #3",
+			method:         http.MethodPost,
+			callGetTimes:   1,
+			callSaveTimes:  0,
+			body:           &register.Request{Login: "UserNotRegistered", Password: "some-password1234"},
+			wantStatusCode: http.StatusInternalServerError,
+			wantError:      errors.New("unexpected error"),
 		},
 	}
 

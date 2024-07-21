@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -66,6 +67,17 @@ func TestRegisterHandler(t *testing.T) {
 			},
 			wantStatusCode: http.StatusConflict,
 			wantError:      storage.ErrUserExists,
+		},
+		{
+			name:      "Negative #3",
+			method:    http.MethodPost,
+			callTimes: 1,
+			body: map[string]string{
+				"login":    "Oleg",
+				"password": "111",
+			},
+			wantStatusCode: http.StatusInternalServerError,
+			wantError:      errors.New("unexpected error"),
 		},
 	}
 

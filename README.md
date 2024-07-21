@@ -1,7 +1,7 @@
 # gophermart 
 
 [//]: # ([![Coverage Status]&#40;https://img.shields.io/badge/coverage-56.5%25-brightgreen&#41;]&#40;https://github.com/RIBorisov/gophermart/coverage.html&#41;)
-
+[![Go Coverage](https://github.com/RIBorisov/gophermart/wiki/coverage.svg)](https://raw.githack.com/wiki/RIBorisov/gophermart/coverage.html)
 # Service Description
 This service provides a RESTful API for managing user accounts, orders and accrual withdrawals. It uses the Chi router and includes several middleware functions for logging, error recovery, and authentication.
 
