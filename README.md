@@ -39,10 +39,12 @@ This service provides a RESTful API for managing user accounts, orders and accru
    - `./accrual_darwin_amd64` - for Windows OS
 
 # Test coverage
-
+## How to update coverage percentage
+1. Run command
 ```bash
 make coverage
 ```
+2. Update README.md with new percentage
 
 # Run tests
 ```bash
