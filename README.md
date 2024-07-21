@@ -1,7 +1,6 @@
 # gophermart 
 
-[//]: # ([![Coverage Status]&#40;https://img.shields.io/badge/coverage-56.5%25-brightgreen&#41;]&#40;https://github.com/RIBorisov/gophermart/coverage.html&#41;)
-[![Go Coverage](https://github.com/RIBorisov/gophermart/wiki/coverage.svg)](https://raw.githack.com/wiki/RIBorisov/gophermart/coverage.html)
+[![Coverage Status](https://img.shields.io/badge/coverage-66.7%25-brightgreen)](https://github.com/RIBorisov/gophermart/coverage.html)
 # Service Description
 This service provides a RESTful API for managing user accounts, orders and accrual withdrawals. It uses the Chi router and includes several middleware functions for logging, error recovery, and authentication.
 
@@ -37,4 +36,15 @@ This service provides a RESTful API for managing user accounts, orders and accru
    - `./accrual_darwin_amd64` - for Intel Macbook OS
    - `./accrual_darwin_ard64` - for Silicon Macbook (M series chip) OS 
    - `./accrual_linux_amd64` - for Linux OS
-   - `./accrual_darwin_amd64` - for Windows OS 
+   - `./accrual_darwin_amd64` - for Windows OS
+
+# Test coverage
+
+```bash
+make coverage
+```
+
+# Run tests
+```bash
+make tests
+```

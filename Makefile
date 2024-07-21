@@ -44,3 +44,7 @@ HTMLREPORT:=coverage.html
 coverage:
 	go test ./internal/handlers -coverprofile=$(RAWFILE) && \
  	go tool cover -html=$(RAWFILE) -o $(HTMLREPORT)
+
+.PHONY: tests
+tests:
+	cd ./internal/handlers && go test . -count 1 -v
