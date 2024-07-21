@@ -2,17 +2,19 @@ package handlers
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+
 	"github.com/RIBorisov/gophermart/internal/config"
 	"github.com/RIBorisov/gophermart/internal/logger"
 	"github.com/RIBorisov/gophermart/internal/service"
 	"github.com/RIBorisov/gophermart/internal/storage"
 	"github.com/RIBorisov/gophermart/internal/storage/mocks"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestWithdrawals(t *testing.T) {
@@ -67,7 +69,7 @@ func TestWithdrawals(t *testing.T) {
 			wantError:      errors.New("unexpected error"),
 		},
 	}
-	for _, tt := range tests {
+	for _, tt := range tests { //nolint:dupl // duplicate code block
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
