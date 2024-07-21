@@ -62,3 +62,5 @@ jobs:
             -accrual-host=localhost \
             -accrual-port=$(random unused-port) \
             -accrual-database-uri="postgresql://postgres:postgres@postgres/praktikum?sslmode=disable"
+      - name: Go coverage report
+        uses: ncruces/go-coverage-report@v0.3.0

@@ -37,6 +37,10 @@ golangci-lint-clean:
 mocks:
 	mockgen -source=internal/storage/storage.go -destination=internal/storage/mocks/storage_mock.gen.go -package=mocks
 
+RAWFILE:=coverage.out
+HTMLREPORT:=coverage.html
+
 .PHONY: coverage
 coverage:
-	cd internal/handlers && go test -coverprofile=coverage.out
+	go test ./internal/handlers -coverprofile=$(RAWFILE) && \
+ 	go tool cover -html=$(RAWFILE) -o $(HTMLREPORT)

@@ -1,0 +1,459 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>handlers: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/RIBorisov/gophermart/internal/handlers/balance.go (75.0%)</option>
+				
+				<option value="file1">github.com/RIBorisov/gophermart/internal/handlers/login.go (60.0%)</option>
+				
+				<option value="file2">github.com/RIBorisov/gophermart/internal/handlers/order.go (70.7%)</option>
+				
+				<option value="file3">github.com/RIBorisov/gophermart/internal/handlers/register.go (62.1%)</option>
+				
+				<option value="file4">github.com/RIBorisov/gophermart/internal/handlers/router.go (0.0%)</option>
+				
+				<option value="file5">github.com/RIBorisov/gophermart/internal/handlers/withdrawals.go (0.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package handlers
+
+import (
+        "encoding/json"
+        "errors"
+        "net/http"
+
+        "github.com/RIBorisov/gophermart/internal/models/balance"
+        "github.com/RIBorisov/gophermart/internal/service"
+        "github.com/RIBorisov/gophermart/internal/storage"
+)
+
+func CurrentBalance(svc *service.Service) http.HandlerFunc <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                ctx := r.Context()
+                current, err := svc.GetBalance(ctx)
+                if err != nil </span><span class="cov8" title="1">{
+                        if errors.Is(err, storage.ErrUserNotExists) </span><span class="cov8" title="1">{
+                                http.Error(w, "Balance info not found", http.StatusNotFound)
+                                return
+                        }</span>
+                        <span class="cov8" title="1">svc.Log.Err("failed get current balance", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return</span>
+                }
+
+                <span class="cov8" title="1">w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusOK)
+
+                if err = json.NewEncoder(w).Encode(current); err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed encode response", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+        }
+}
+
+func BalanceWithdraw(svc *service.Service) http.HandlerFunc <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                ctx := r.Context()
+                var req balance.WithdrawRequest
+
+                err := json.NewDecoder(r.Body).Decode(&amp;req)
+                if err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed decode request into struct", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+                <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{
+                        if err = r.Body.Close(); err != nil </span><span class="cov0" title="0">{
+                                svc.Log.Err("failed close request body", err)
+                                http.Error(w, "", http.StatusInternalServerError)
+                        }</span>
+                }()
+
+                <span class="cov8" title="1">if err = service.ValidateLuhn(req.Order); err != nil </span><span class="cov0" title="0">{
+                        http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">err = svc.BalanceWithdraw(ctx, req)
+                if err != nil </span><span class="cov8" title="1">{
+                        if errors.Is(err, storage.ErrInsufficientFunds) </span><span class="cov8" title="1">{
+                                http.Error(w, "You have insufficient funds", http.StatusPaymentRequired)
+                                return
+                        }</span>
+                        <span class="cov8" title="1">svc.Log.Err("failed make balance withdraw", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return</span>
+                }
+
+                <span class="cov8" title="1">w.WriteHeader(http.StatusOK)</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package handlers
+
+import (
+        "encoding/json"
+        "errors"
+        "net/http"
+
+        "github.com/RIBorisov/gophermart/internal/models/login"
+        "github.com/RIBorisov/gophermart/internal/models/register"
+        "github.com/RIBorisov/gophermart/internal/service"
+        "github.com/RIBorisov/gophermart/internal/storage"
+)
+
+func Login(svc *service.Service) http.HandlerFunc <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                ctx := r.Context()
+                response := login.Response{
+                        Success: true,
+                        Details: "Successfully logged in",
+                }
+                var user *register.Request
+
+                if err := json.NewDecoder(r.Body).Decode(&amp;user); err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed decode register request", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if err := r.Body.Close(); err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed close request body", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if err := user.Validate(); err != nil </span><span class="cov8" title="1">{
+                        http.Error(w, "Please, check if login and password provided", http.StatusBadRequest)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">w.Header().Set("Content-Type", "application/json")
+
+                authToken, err := svc.LoginUser(ctx, user)
+                if err != nil </span><span class="cov8" title="1">{
+                        if errors.Is(err, storage.ErrUserNotExists) || errors.Is(err, service.ErrIncorrectPassword) </span><span class="cov8" title="1">{
+                                http.Error(w, "Invalid login and (or) password", http.StatusUnauthorized)
+                                return
+                        }</span> else<span class="cov0" title="0"> {
+                                svc.Log.Err("failed login user", err)
+                                http.Error(w, "", http.StatusInternalServerError)
+                                return
+                        }</span>
+                }
+
+                <span class="cov8" title="1">w.Header().Set("Authorization", "Bearer "+authToken)
+                w.WriteHeader(http.StatusOK)
+
+                if err = json.NewEncoder(w).Encode(response); err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed encode response", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package handlers
+
+import (
+        "encoding/json"
+        "errors"
+        "io"
+        "net/http"
+
+        "github.com/RIBorisov/gophermart/internal/service"
+        "github.com/RIBorisov/gophermart/internal/storage"
+)
+
+func CreateOrder(svc *service.Service) http.HandlerFunc <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                ctx := r.Context()
+                orderNo, err := io.ReadAll(r.Body)
+                if err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed read request body", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+                <span class="cov8" title="1">if len(orderNo) == 0 </span><span class="cov8" title="1">{
+                        http.Error(w, "Empty request body, please provide order number", http.StatusBadRequest)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if err = service.ValidateLuhn(string(orderNo)); err != nil </span><span class="cov8" title="1">{
+                        http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
+                        return
+                }</span>
+                <span class="cov8" title="1">if err = svc.CreateOrder(ctx, string(orderNo)); err != nil </span><span class="cov8" title="1">{
+                        if errors.Is(err, storage.ErrAnotherUserOrderCreated) </span><span class="cov8" title="1">{
+                                http.Error(w, storage.ErrAnotherUserOrderCreated.Error(), http.StatusConflict)
+                                return
+                        }</span>
+                        <span class="cov0" title="0">if errors.Is(err, storage.ErrOrderCreatedAlready) </span><span class="cov0" title="0">{
+                                w.WriteHeader(http.StatusOK)
+                                return
+                        }</span> else<span class="cov0" title="0"> {
+                                svc.Log.Err("failed create order", err)
+                                http.Error(w, "", http.StatusInternalServerError)
+                                return
+                        }</span>
+                }
+                <span class="cov8" title="1">svc.Log.Info("successfully loaded order", "order_id", string(orderNo))
+                w.WriteHeader(http.StatusAccepted)</span>
+        }
+}
+
+func GetOrders(svc *service.Service) http.HandlerFunc <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                ctx := r.Context()
+
+                list, err := svc.GetUserOrders(ctx)
+                if err != nil </span><span class="cov8" title="1">{
+                        svc.Log.Err("failed get orders", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if len(list) == 0 </span><span class="cov8" title="1">{
+                        w.WriteHeader(http.StatusNoContent)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusOK)
+
+                if err = json.NewEncoder(w).Encode(list); err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed encode response", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package handlers
+
+import (
+        "encoding/json"
+        "errors"
+        "fmt"
+        "net/http"
+
+        "github.com/RIBorisov/gophermart/internal/models/register"
+        "github.com/RIBorisov/gophermart/internal/service"
+        "github.com/RIBorisov/gophermart/internal/storage"
+)
+
+func Register(svc *service.Service) http.HandlerFunc <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                ctx := r.Context()
+                var user *register.Request
+                if err := json.NewDecoder(r.Body).Decode(&amp;user); err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed decode register request", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if err := r.Body.Close(); err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed close request body", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if err := user.Validate(); err != nil </span><span class="cov8" title="1">{
+                        http.Error(w, "Please, check if login and password provided", http.StatusBadRequest)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">w.Header().Set("Content-Type", "application/json")
+
+                authToken, err := svc.RegisterUser(ctx, user)
+
+                if err != nil </span><span class="cov8" title="1">{
+                        if errors.Is(err, storage.ErrUserExists) </span><span class="cov8" title="1">{
+                                http.Error(w, "User already exists", http.StatusConflict)
+                                return
+                        }</span> else<span class="cov0" title="0"> {
+                                svc.Log.Err("failed register user", err)
+                                http.Error(w, "", http.StatusInternalServerError)
+                        }</span>
+                }
+
+                <span class="cov8" title="1">w.Header().Set("Authorization", "Bearer "+authToken)
+                w.WriteHeader(http.StatusOK)
+
+                response := register.Response{
+                        Success: true,
+                        Details: fmt.Sprintf("Successfully registered user with name '%s'", user.Login),
+                }
+
+                if err = json.NewEncoder(w).Encode(response); err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed encode response", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package handlers
+
+import (
+        "github.com/go-chi/chi/v5"
+        "github.com/go-chi/chi/v5/middleware"
+
+        myMW "github.com/RIBorisov/gophermart/internal/middleware"
+        "github.com/RIBorisov/gophermart/internal/service"
+)
+
+func NewRouter(svc *service.Service) *chi.Mux <span class="cov0" title="0">{
+        router := chi.NewRouter()
+        router.Use(middleware.Logger)
+        router.Use(middleware.Recoverer)
+
+        router.Post("/api/user/register", Register(svc))
+        router.Post("/api/user/login", Login(svc))
+        router.Route("/api/user", func(r chi.Router) </span><span class="cov0" title="0">{
+                r.Use(myMW.CheckAuth(svc).Middleware)
+                r.Post("/orders", CreateOrder(svc))
+                r.With(myMW.Compression(svc.Log).Middleware).Get("/orders", GetOrders(svc))
+                r.Get("/balance", CurrentBalance(svc))
+                r.Post("/balance/withdraw", BalanceWithdraw(svc))
+                r.With(myMW.Compression(svc.Log).Middleware).Get("/withdrawals", Withdrawals(svc))
+        }</span>)
+
+        <span class="cov0" title="0">return router</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package handlers
+
+import (
+        "encoding/json"
+        "errors"
+        "net/http"
+
+        "github.com/RIBorisov/gophermart/internal/service"
+)
+
+func Withdrawals(svc *service.Service) http.HandlerFunc <span class="cov0" title="0">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                wList, err := svc.GetWithdrawals(r.Context())
+                if err != nil </span><span class="cov0" title="0">{
+                        if errors.Is(err, service.ErrNoWithdrawals) </span><span class="cov0" title="0">{
+                                w.WriteHeader(http.StatusNoContent)
+                                return
+                        }</span>
+                        <span class="cov0" title="0">svc.Log.Err("failed get withdrawals list", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return</span>
+                }
+
+                <span class="cov0" title="0">w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusOK)
+
+                if err = json.NewEncoder(w).Encode(wList); err != nil </span><span class="cov0" title="0">{
+                        svc.Log.Err("failed encode withdrawals response", err)
+                        http.Error(w, "", http.StatusInternalServerError)
+                        return
+                }</span>
+        }
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
