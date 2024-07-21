@@ -23,6 +23,3 @@ vendor/
 .vscode
 golangci-lint/
 .golangci.yml
-
-# временно
-*.html

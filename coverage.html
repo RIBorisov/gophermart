@@ -57,15 +57,15 @@
 				
 				<option value="file0">github.com/RIBorisov/gophermart/internal/handlers/balance.go (75.0%)</option>
 				
-				<option value="file1">github.com/RIBorisov/gophermart/internal/handlers/login.go (60.0%)</option>
+				<option value="file1">github.com/RIBorisov/gophermart/internal/handlers/login.go (70.0%)</option>
 				
 				<option value="file2">github.com/RIBorisov/gophermart/internal/handlers/order.go (70.7%)</option>
 				
-				<option value="file3">github.com/RIBorisov/gophermart/internal/handlers/register.go (62.1%)</option>
+				<option value="file3">github.com/RIBorisov/gophermart/internal/handlers/register.go (69.0%)</option>
 				
 				<option value="file4">github.com/RIBorisov/gophermart/internal/handlers/router.go (0.0%)</option>
 				
-				<option value="file5">github.com/RIBorisov/gophermart/internal/handlers/withdrawals.go (0.0%)</option>
+				<option value="file5">github.com/RIBorisov/gophermart/internal/handlers/withdrawals.go (80.0%)</option>
 				
 				</select>
 			</div>
@@ -201,7 +201,7 @@ func Login(svc *service.Service) http.HandlerFunc <span class="cov8" title="1">{
                         if errors.Is(err, storage.ErrUserNotExists) || errors.Is(err, service.ErrIncorrectPassword) </span><span class="cov8" title="1">{
                                 http.Error(w, "Invalid login and (or) password", http.StatusUnauthorized)
                                 return
-                        }</span> else<span class="cov0" title="0"> {
+                        }</span> else<span class="cov8" title="1"> {
                                 svc.Log.Err("failed login user", err)
                                 http.Error(w, "", http.StatusInternalServerError)
                                 return
@@ -339,7 +339,7 @@ func Register(svc *service.Service) http.HandlerFunc <span class="cov8" title="1
                         if errors.Is(err, storage.ErrUserExists) </span><span class="cov8" title="1">{
                                 http.Error(w, "User already exists", http.StatusConflict)
                                 return
-                        }</span> else<span class="cov0" title="0"> {
+                        }</span> else<span class="cov8" title="1"> {
                                 svc.Log.Err("failed register user", err)
                                 http.Error(w, "", http.StatusInternalServerError)
                         }</span>
@@ -402,20 +402,20 @@ import (
         "github.com/RIBorisov/gophermart/internal/service"
 )
 
-func Withdrawals(svc *service.Service) http.HandlerFunc <span class="cov0" title="0">{
-        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+func Withdrawals(svc *service.Service) http.HandlerFunc <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
                 wList, err := svc.GetWithdrawals(r.Context())
-                if err != nil </span><span class="cov0" title="0">{
-                        if errors.Is(err, service.ErrNoWithdrawals) </span><span class="cov0" title="0">{
+                if err != nil </span><span class="cov8" title="1">{
+                        if errors.Is(err, service.ErrNoWithdrawals) </span><span class="cov8" title="1">{
                                 w.WriteHeader(http.StatusNoContent)
                                 return
                         }</span>
-                        <span class="cov0" title="0">svc.Log.Err("failed get withdrawals list", err)
+                        <span class="cov8" title="1">svc.Log.Err("failed get withdrawals list", err)
                         http.Error(w, "", http.StatusInternalServerError)
                         return</span>
                 }
 
-                <span class="cov0" title="0">w.Header().Set("Content-Type", "application/json")
+                <span class="cov8" title="1">w.Header().Set("Content-Type", "application/json")
                 w.WriteHeader(http.StatusOK)
 
                 if err = json.NewEncoder(w).Encode(wList); err != nil </span><span class="cov0" title="0">{
