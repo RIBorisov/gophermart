@@ -6,7 +6,7 @@ on:
       - '*'
 
 permissions:
-  contents: read, write
+  contents: write
 
 jobs:
   coverage-update:
