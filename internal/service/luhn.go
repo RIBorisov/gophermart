@@ -4,19 +4,16 @@ import (
 	"errors"
 )
 
-const (
-	asciiZero = 48
-	asciiTen  = 57
-)
+const asciiTen = 57
 
 func calculateLuhnSum(number string, parity int) (int64, error) {
 	var sum int64
 	for i, d := range number {
-		if d < asciiZero || d > asciiTen {
+		if d < '0' || d > asciiTen {
 			return 0, errors.New("invalid digit")
 		}
 
-		d -= asciiZero
+		d -= '0'
 		if i%2 == parity {
 			d *= 2
 			if d > 9 {
