@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -215,9 +217,23 @@ func (s *Service) FetchOrderInfo(
 	if err != nil {
 		return nil, fmt.Errorf("failed make request to accrual: %w", err)
 	}
+
+	if resp.StatusCode() == http.StatusTooManyRequests {
+		retryAfter, convertErr := strconv.Atoi(resp.Header().Get("Retry-After"))
+		if convertErr != nil {
+			return nil, fmt.Errorf("failed convert Retry-After header to int: %w", convertErr)
+		}
+		err := &ToManyRequestsError{
+			RetryAfter: time.Duration(retryAfter) * time.Second,
+			Message:    "Got StatusTooManyRequests error, should wait..."}
+		s.Log.Info(err.Error())
+		return nil, err
+	}
+
 	if !resp.IsSuccess() {
 		return nil, fmt.Errorf("got unexpected request error: %s", resp.Error())
 	}
+
 	return &updatedInfo, nil
 }
 
@@ -242,3 +258,12 @@ var (
 	ErrNoWithdrawals     = errors.New("user has no withdrawals yet")
 	ErrIncorrectPassword = errors.New("invalid password")
 )
+
+type ToManyRequestsError struct {
+	Message    string
+	RetryAfter time.Duration
+}
+
+func (e *ToManyRequestsError) Error() string {
+	return fmt.Sprintf("error: %s, duration: %v", e.Message, e.RetryAfter)
+}

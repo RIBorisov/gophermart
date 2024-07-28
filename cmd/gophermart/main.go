@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -56,32 +56,63 @@ func runApp(cfg *config.Config, log *logger.Log) error {
 	svc := &service.Service{Log: log, Storage: store, Config: cfg}
 
 	ordersCh := make(chan string)
-	resultCh := make(chan string)
+
 	client := initClient(svc)
+	retry := &retryCtrl{}
+
 	const (
-		workerNum       = 3
+		workerNum       = 5
 		timeoutShutdown = time.Second * 5
 	)
 
-	// обрабатываем заказ если ctx активен, записываем в resultCh номер заказа
 	for range workerNum {
 		g.Go(func() error {
 			for o := range ordersCh {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-					if err := accrual.ProcessOrder(ctx, svc, o, client); err != nil {
-						return err
+				svc.Log.Info("incoming new order", "order_id", o)
+				for {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
+						if retry.retry {
+							svc.Log.Info("Waiting for retry", "seconds", retry.wait)
+							time.Sleep(retry.wait)
+							retry.mu.Lock()
+							retry.wait = 0 * time.Second
+							retry.retry = false
+							retry.mu.Unlock()
+						}
+						svc.Log.Info("starting process order", "order_id", o)
+						data, fetchErr := svc.FetchOrderInfo(ctx, client, o)
+						if fetchErr != nil {
+							var errToManyRequests *service.ToManyRequestsError
+							if errors.As(fetchErr, &errToManyRequests) {
+								retry.mu.Lock()
+								retry.retry = true
+								retry.wait = errToManyRequests.RetryAfter
+								retry.mu.Unlock()
+								continue
+							} else {
+								return fmt.Errorf("failed fetch order info: %w", fetchErr)
+							}
+						}
+
+						if data == nil {
+							svc.Log.Info("not found orders for processing in accrual service")
+							continue
+						}
+						err = svc.UpdateOrder(ctx, data)
+						if err != nil {
+							return fmt.Errorf("failed update order: %w", err)
+						}
 					}
-					resultCh <- o
+					break
 				}
 			}
 			return nil
 		})
 	}
 
-	// получаем заказы из БД и пишем в ordersCh, если контекст отменен - закрываем ordersCh
 	g.Go(func() error {
 		accrual.GetOrders(ctx, svc, ordersCh)
 		<-ctx.Done()
@@ -108,7 +139,6 @@ func runApp(cfg *config.Config, log *logger.Log) error {
 	g.Go(func() error {
 		enableGracefulShutdown(ctx, svc, srv)
 		<-ctx.Done()
-		close(resultCh)
 		svc.Log.Debug("closing GracefulShutdown goroutine")
 		return nil
 	})
@@ -156,19 +186,11 @@ func enableGracefulShutdown(ctx context.Context, svc *service.Service, srv *http
 }
 
 func initClient(svc *service.Service) *resty.Client {
-	client := resty.New().SetBaseURL(svc.Config.Service.AccrualSystemAddress)
-	client.AddRetryCondition(func(r *resty.Response, err error) bool {
-		if r.StatusCode() == http.StatusTooManyRequests {
-			retryAfter, err := strconv.Atoi(r.Header().Get("Retry-After"))
-			if err != nil {
-				svc.Log.Err("failed convert string to integer Retry-After header value: %w", err)
-				return true
-			}
-			time.Sleep(time.Duration(retryAfter) * time.Second)
-			return true
-		}
+	return resty.New().SetBaseURL(svc.Config.Service.AccrualSystemAddress)
+}
 
-		return false
-	})
-	return client
+type retryCtrl struct {
+	retry bool
+	wait  time.Duration
+	mu    sync.Mutex
 }
