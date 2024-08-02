@@ -7,11 +7,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
-	"github.com/go-resty/resty/v2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/RIBorisov/gophermart/internal/config"
@@ -57,9 +55,6 @@ func runApp(cfg *config.Config, log *logger.Log) error {
 
 	ordersCh := make(chan string)
 
-	client := initClient(svc)
-	retry := &retryCtrl{}
-
 	const (
 		workerNum       = 5
 		timeoutShutdown = time.Second * 5
@@ -69,44 +64,8 @@ func runApp(cfg *config.Config, log *logger.Log) error {
 		g.Go(func() error {
 			for o := range ordersCh {
 				svc.Log.Info("incoming new order", "order_id", o)
-				for {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					default:
-						if retry.retry {
-							svc.Log.Info("Waiting for retry", "seconds", retry.wait)
-							time.Sleep(retry.wait)
-							retry.mu.Lock()
-							retry.wait = 0 * time.Second
-							retry.retry = false
-							retry.mu.Unlock()
-						}
-						svc.Log.Info("starting process order", "order_id", o)
-						data, fetchErr := svc.FetchOrderInfo(ctx, client, o)
-						if fetchErr != nil {
-							var errToManyRequests *service.ToManyRequestsError
-							if errors.As(fetchErr, &errToManyRequests) {
-								retry.mu.Lock()
-								retry.retry = true
-								retry.wait = errToManyRequests.RetryAfter
-								retry.mu.Unlock()
-								continue
-							} else {
-								return fmt.Errorf("failed fetch order info: %w", fetchErr)
-							}
-						}
-
-						if data == nil {
-							svc.Log.Info("not found orders for processing in accrual service")
-							continue
-						}
-						err = svc.UpdateOrder(ctx, data)
-						if err != nil {
-							return fmt.Errorf("failed update order: %w", err)
-						}
-					}
-					break
+				if err = accrual.FetchAndUpdateOrders(ctx, svc, o); err != nil {
+					return fmt.Errorf("failed to process order: %w", err)
 				}
 			}
 			return nil
@@ -183,14 +142,4 @@ func enableGracefulShutdown(ctx context.Context, svc *service.Service, srv *http
 	if err := srv.Shutdown(ctx); err != nil {
 		svc.Log.Fatal("failed make graceful shutdown")
 	}
-}
-
-func initClient(svc *service.Service) *resty.Client {
-	return resty.New().SetBaseURL(svc.Config.Service.AccrualSystemAddress)
-}
-
-type retryCtrl struct {
-	retry bool
-	wait  time.Duration
-	mu    sync.Mutex
 }
