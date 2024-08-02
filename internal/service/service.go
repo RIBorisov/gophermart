@@ -37,7 +37,7 @@ type Store interface {
 
 type Service struct {
 	Log     *logger.Log
-	Storage storage.Store
+	Storage Store
 	Config  *config.Config
 }
 

@@ -18,26 +18,13 @@ import (
 	"github.com/RIBorisov/gophermart/internal/models/register"
 )
 
-type Store interface {
-	SaveUser(ctx context.Context, user *register.Request) (string, error)
-	GetUser(ctx context.Context, login string) (*UserRow, error)
-	SaveOrder(ctx context.Context, orderNo string) error
-	GetUserOrders(ctx context.Context) ([]OrderEntity, error)
-	GetBalance(ctx context.Context) (*BalanceEntity, error)
-	BalanceWithdraw(ctx context.Context, req balance.WithdrawRequest) error
-	GetWithdrawals(ctx context.Context) ([]WithdrawalsEntity, error)
-	GetOrdersList(ctx context.Context) ([]string, error)
-	UpdateOrder(ctx context.Context, data *orders.UpdateOrder) error
-	ClosePool() error
-}
-
 type DB struct {
 	*DBPool
 	cfg *config.Config
 	log *logger.Log
 }
 
-func LoadStorage(ctx context.Context, cfg *config.Config, log *logger.Log) (Store, error) {
+func LoadStorage(ctx context.Context, cfg *config.Config, log *logger.Log) (*DB, error) {
 	pool, err := NewPool(ctx, cfg.Service.DatabaseDSN, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed acquire new db pool: %w", err)
